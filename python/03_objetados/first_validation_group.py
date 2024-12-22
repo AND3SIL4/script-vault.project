@@ -424,10 +424,18 @@ class FirstValidationGroup:
             exception_df.iloc[:, 3].dropna().astype(str).to_list()
         )
 
+        list_df: pd.DataFrame = self.read_excel(self.exception_file, "LISTAS")
+        list_fecha: list[str] = (
+            list_df["FECHA DE VENCIMIENTO"].dropna().astype(str).to_list()
+        )
+
         ## Sub function to validate the expiration date
         def validate_date(ramo: str, expiration_date: str) -> bool:
             if ramo == "DESEMPLEO":
-                return bool(re.search(r"^\d{2}/\d{2}/\d{4};\d{1,12}$", expiration_date))
+                return (
+                    bool(re.search(r"^\d{2}/\d{2}/\d{4};\d{1,12}$", expiration_date))
+                    or expiration_date in list_fecha
+                )
             else:
                 return (expiration_date == "nan") or ramo in exception_list
 
@@ -906,4 +914,4 @@ if __name__ == "__main__":
     }
     otros = {"col_idx": "51"}
     print(main(params))
-    print(validate_check_sarlaf())
+    print(validate_fecha_vencimiento())

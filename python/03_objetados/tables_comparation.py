@@ -148,7 +148,6 @@ def validate_tables(current_table: pd.DataFrame, latest_table: pd.DataFrame) -> 
     current_table.loc["TOTAL_ACTUAL"] = current_sum
     current_table.loc["TOTAL_ANTERIOR"] = latest_sum
     current_table.loc["VALIDACION"] = latest_sum == current_sum
-
     ##Return validation
     return current_sum.equals(latest_sum)
 
@@ -167,7 +166,8 @@ def save_final_table(
 def report_inconsistencies(df: pd.DataFrame, file_path: str, sheet_name: str) -> None:
     """Report inconsistencies in the validation."""
     sorted_df = sort_month_columns(df)
-    append_inconsistencias(file_path, sheet_name, sorted_df)
+    message = append_inconsistencias(file_path, sheet_name, sorted_df)
+    print(message)
 
 
 def sort_month_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -206,7 +206,7 @@ def save_to_file(data_frame: pd.DataFrame, file_path: str, sheet_name: str) -> N
 
 def append_inconsistencias(file_path: str, new_sheet: str, data_frame) -> None:
     """This function get the inconsistencies data frame and append it into the inconsistencies file"""
-    if os.path.exists(file_path):
+    try:
         with pd.ExcelFile(file_path, engine="openpyxl") as xls:
             if new_sheet in xls.sheet_names:
                 existing = pd.read_excel(xls, sheet_name=new_sheet, engine="openpyxl")
@@ -217,16 +217,19 @@ def append_inconsistencias(file_path: str, new_sheet: str, data_frame) -> None:
         ) as writer:
             data_frame.to_excel(writer, index=True, sheet_name=new_sheet)
             return "Inconsistencias registradas correctamente"
+        
+    except Exception as e:
+        return f"Error al registrar inconsistencias: {e}"
 
 
 if __name__ == "__main__":
     params = {
         "file_path": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BaseObjetados_SabanaPagosBasesSiniestralidad\Temp\Objetados.xlsx",
         "sheet_name": "Objeciones 2022 - 2023 -2024",
-        "latest_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BaseObjetados_SabanaPagosBasesSiniestralidad\Output\Historico\Objetados 102024.xlsx",
+        "latest_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BaseObjetados_SabanaPagosBasesSiniestralidad\Output\Historico Objetados\Objetados 102024.xlsx",
         "col_idx": "44",
-        "cut_off_date": "30/06/2024",
-        "inconsistencias_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BaseObjetados_SabanaPagosBasesSiniestralidad\Output\Inconsistencias\InconsistenciasBaseObjetados.xlsx",
+        "cut_off_date": "31/10/2024",
+        "inconsistencias_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BaseObjetados_SabanaPagosBasesSiniestralidad\Temp\InconsistenciasBaseObjetados.xlsx",
     }
 
     print(main(params))

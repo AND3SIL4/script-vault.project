@@ -116,26 +116,6 @@ def extract_data_from_propuesta(data_frame: pd.DataFrame) -> pd.DataFrame:
     return data_frame
 
 
-def get_acm_report(acm_files: list[str]) -> pd.DataFrame:
-    # Create list of data frames
-    data_frames: list[pd.DataFrame] = []
-    for file in acm_files:
-        # Read the file
-        df: pd.DataFrame = values_validation.read_excel(
-            file, "FCT_RS_REPORTE_WS_AUDITORIA"
-        )
-        # Delete te no needed columns and rows
-        df = df.iloc[3:, 1:]
-        df.columns = df.iloc[0]
-        df = df.iloc[1:].reset_index(drop=True)
-        df = df[["id cuenta", "valor aprobado", "Valor Liquidado"]]
-        # Append data frame into the main data frame
-        data_frames.append(df)
-
-    # Contact all the data frames into a new data frame and return it
-    return pd.concat(data_frames, ignore_index=True)
-
-
 def cross_file(propuesta_df: pd.DataFrame, acm_df: pd.DataFrame) -> pd.DataFrame:
     """Method to cross the propuesta and acm report and return the merged data frame"""
     # Merge the two data frames based on the radicado number
@@ -216,7 +196,7 @@ def apply_formulas(data_frame: pd.DataFrame, historical_df: pd.DataFrame) -> Non
     return data_frame
 
 
-def validate_values(acm_files: list[str]) -> None:
+def validate_values(acm_file: str) -> None:
     try:
         # Extract data from propuesta de pagos file
         propuesta_pago_df = values_validation.read_excel(
@@ -226,9 +206,18 @@ def validate_values(acm_files: list[str]) -> None:
         historical_df: pd.DataFrame = values_validation.read_excel(
             values_validation.previous_file, values_validation.sheet_name
         )
+        # Get the ACM report data fame
+        acm_report: pd.DataFrame = values_validation.read_excel(
+            acm_file, "FCT_RS_REPORTE_WS_AUDITORIA"
+        )
+        # Delete te no needed columns and rows
+        acm_report = acm_report.iloc[3:, 1:]
+        acm_report.columns = acm_report.iloc[0]
+        acm_report = acm_report.iloc[1:].reset_index(drop=True)
+        acm_report = acm_report[["id cuenta", "valor aprobado", "Valor Liquidado"]]
+
         # Validate and extract the important data from propuesta and acm report
         propuesta_df: pd.DataFrame = extract_data_from_propuesta(propuesta_pago_df)
-        acm_report: pd.DataFrame = get_acm_report(acm_files)
         merged_df: pd.DataFrame = cross_file(propuesta_df, acm_report)
         # Apply formulas to validate inconsistencies
         filled_df: pd.DataFrame = apply_formulas(merged_df, historical_df)
@@ -371,8 +360,5 @@ if __name__ == "__main__":
         "temp_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Temp\Pagos red asistencial 18122024.xlsx",
     }
     main(params)
-    incomes = [
-        r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Temp\FCT_RS_REPORTE_WS_AUDITORIA Desde el 01-01-2024 Hasta el 30-06-2024.xlsx",
-        r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Temp\FCT_RS_REPORTE_WS_AUDITORIA Desde el 01-07-2024 Hasta el 24-10-2024.xlsx",
-    ]
+    incomes = r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Temp\FCT_RS_REPORTE_WS_AUDITORIA.xlsx"
     print(validate_values(incomes))
