@@ -14,6 +14,7 @@ class ValuesValidation:
         file_name: str,
         previous_file: str,
         temp_file: str,
+        historic_file: str,
     ):
         self.file_path = file_path
         self.inconsistencies_file = inconsistencies_file
@@ -22,6 +23,7 @@ class ValuesValidation:
         self.file_name = file_name
         self.previous_file = previous_file
         self.temp_file = temp_file
+        self.historic_file = historic_file
 
     def read_excel(self, file_path: str, sheet_name: str) -> pd.DataFrame:
         """Method for returning a data frame"""
@@ -174,18 +176,12 @@ def apply_formulas(data_frame: pd.DataFrame, historical_df: pd.DataFrame) -> Non
 
     # Validate records duplicates
     ## Radicado column
-    radicado_cl = data_frame.columns[1]
-    radicado_count = data_frame[radicado_cl].map(data_frame[radicado_cl].value_counts())
-    radicados_in_list = data_frame[radicado_cl].map(
-        lambda value: historical_radicados.count(value)
-    )
-    data_frame[historical_df.columns[8]] = radicado_count + radicados_in_list
+    add_number_of_duplicates(data_frame, historical_df, historical_radicados, 1, 8)
 
-    key_col = data_frame.columns[3]
-    key_count = data_frame[key_col].map(data_frame[key_col].value_counts())
-    key_in_list = data_frame[key_col].map(lambda value: historical_key.count(value))
-    data_frame[historical_df.columns[9]] = key_count + key_in_list
+    ## Key column: (radicado number + concepto value)
+    add_number_of_duplicates(data_frame, historical_df, historical_key, 3, 9)
 
+    # Validate format values in columns
     data_frame[historical_df.columns[10]] = data_frame[data_frame.columns[1]].apply(
         lambda value: str(value).replace(",", "").replace(".", "").isdigit()
     )
@@ -194,9 +190,81 @@ def apply_formulas(data_frame: pd.DataFrame, historical_df: pd.DataFrame) -> Non
     )
 
     data_frame[historical_df.columns[12]] = values_validation.get_file_date()
-    # Set unique columns
+
+    # Validate if the "radicado" number starts with a different number of year
+    # Get the current year
+    year = datetime.now().year
+
+    # Sub function to validate if the "radicado" number starts with a different number aside current year
+    def validate_previous_radicados(radicado: str) -> int:
+        current_radicado_year = radicado[:4]
+        if current_radicado_year != str(year):
+            previous_dfs: list[pd.DataFrame] = []
+            for year_to_read in range(int(current_radicado_year), year + 1):
+                df: pd.DataFrame = values_validation.read_excel(
+                    values_validation.historic_file, sheet_name=str(year_to_read)
+                )
+                previous_dfs.append(df)
+            entire_df: pd.DataFrame = pd.concat(previous_dfs, ignore_index=True)
+            entire_list: list[str] = (
+                entire_df[entire_df.columns[1]].dropna().astype(str).to_list()
+            )
+            return entire_list.count(radicado)
+
+    def validate_previous_key(key: str) -> int:
+        current_key_year = key[:4]
+        if current_key_year != str(year):
+            previous_dfs: list[pd.DataFrame] = []
+            for year_to_read in range(int(current_key_year), year + 1):
+                df: pd.DataFrame = values_validation.read_excel(
+                    values_validation.historic_file, sheet_name=str(year_to_read)
+                )
+                previous_dfs.append(df)
+            entire_df: pd.DataFrame = pd.concat(previous_dfs, ignore_index=True)
+            key_column_list: list[str] = (
+                entire_df.iloc[:, 3].str.replace(" -", "").astype(str).to_list()
+            )
+            # Return the amount of values in the historical key list
+            return key_column_list.count(key)
+
+    data_frame["is_previous_key"] = data_frame.apply(
+        lambda row: validate_previous_key(str(row.iloc[3])),
+        axis=1,
+    )
+    data_frame["is_previous_radicado"] = data_frame.apply(
+        lambda row: validate_previous_radicados(str(row.iloc[1])),
+        axis=1,
+    )
+
+    # Sum the previous radicado in previous years
+    data_frame[historical_df.columns[8]] = data_frame[historical_df.columns[8]].astype(
+        int
+    ) + data_frame["is_previous_radicado"].fillna(0).astype(int)
+
+    data_frame[historical_df.columns[9]] = data_frame[historical_df.columns[9]].astype(
+        int
+    ) + data_frame["is_previous_key"].fillna(0).astype(int)
+
+    # Ignore no needed temp columns
+    data_frame = data_frame.iloc[:, :13]
+    print(data_frame)  # <-- this is the final data frame
+    # Set up unique columns
     data_frame.columns = historical_df.columns
     return data_frame
+
+
+def add_number_of_duplicates(
+    data_frame: pd.DataFrame,
+    historical_df: pd.DataFrame,
+    previous_list: list,
+    index_col: int,
+    historical_index_col: int,
+) -> None:
+    ## Key column: (radicado number + concepto value)
+    key_col = data_frame.columns[index_col]
+    key_count = data_frame[key_col].map(data_frame[key_col].value_counts())
+    key_in_list = data_frame[key_col].map(lambda value: previous_list.count(value))
+    data_frame[historical_df.columns[historical_index_col]] = key_count + key_in_list
 
 
 def validate_values(acm_file: str) -> None:
@@ -230,7 +298,7 @@ def validate_values(acm_file: str) -> None:
         final_df: pd.DataFrame = pd.concat(
             [historical_df, filled_df], ignore_index=True
         )
-        # Save the final file
+        # Save the final file into temp file folder
         final_df.to_excel(
             values_validation.temp_file,
             sheet_name=values_validation.sheet_name,
@@ -345,6 +413,7 @@ def main(params: dict) -> bool:
                 file_name=params.get("file_name"),
                 previous_file=params.get("previous_file"),
                 temp_file=params.get("temp_file"),
+                historic_file=params.get("historic_file"),
             )
             return True
     except Exception as e:
@@ -361,6 +430,7 @@ if __name__ == "__main__":
         "file_name": "PROPUESTA DE PAGO (23-10-2024).xlsx",
         "previous_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Output\Historico Pagos Red Asistencial\RED ASISTENCIAL 23102024.xlsx",
         "temp_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Temp\Pagos red asistencial 18122024.xlsx",
+        "historic_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Input\VALIDADOR PAGOS.xlsx",
     }
     main(params)
     incomes = r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Temp\FCT_RS_REPORTE_WS_AUDITORIA.xlsx"
