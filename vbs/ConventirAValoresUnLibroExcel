@@ -1,0 +1,40 @@
+Sub ConvertirABValores(ByVal libro As Workbook)
+    Dim hoja As Worksheet
+    Dim celda As Range
+    Dim vinculacion As Variant
+
+    ' Desactivar alertas y actualizaciones
+    Application.DisplayAlerts = False
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False
+    Application.AskToUpdateLinks = False
+    Application.UpdateLinks = xlUpdateLinksNever  ' Desactivar actualización de vínculos
+
+    ' Desactivar actualizaciones de vínculos
+    vinculacion = libro.LinkSources(xlOLELinks)
+    If Not IsEmpty(vinculacion) Then
+        For Each vLink In vinculacion
+            libro.BreakLink Name:=vLink, Type:=xlOLELinks
+        Next vLink
+    End If
+
+    ' Por cada hoja.
+    For Each hoja In libro.Sheets
+        hoja.Activate
+        For Each celda In hoja.UsedRange
+            If celda.HasFormula Then
+                celda.Value = celda.Value
+            End If
+        Next celda
+    Next hoja
+
+    ' Liberar objetos y cerrar libro
+    libro.Close SaveChanges:=True
+
+    ' Restaurar configuraciones predeterminadas
+    Application.DisplayAlerts = True
+    Application.ScreenUpdating = True
+    Application.EnableEvents = True
+    Application.AskToUpdateLinks = True
+    Application.UpdateLinks = xlUpdateLinksPrompt  
+End Sub
