@@ -173,15 +173,18 @@ def apply_formulas(data_frame: pd.DataFrame, historical_df: pd.DataFrame) -> Non
     ) == data_frame.iloc[:, 5].astype(int)
 
     # Validate records duplicates
-    data_frame[historical_df.columns[8]] = (
-        data_frame.iloc[:, 1].duplicated(keep=False)
-        | data_frame.iloc[:, 1].isin(historical_radicados)
-    ).map({True: 2, False: 1})
+    ## Radicado column
+    radicado_cl = data_frame.columns[1]
+    radicado_count = data_frame[radicado_cl].map(data_frame[radicado_cl].value_counts())
+    radicados_in_list = data_frame[radicado_cl].map(
+        lambda value: historical_radicados.count(value)
+    )
+    data_frame[historical_df.columns[8]] = radicado_count + radicados_in_list
 
-    data_frame[historical_df.columns[9]] = (
-        data_frame.iloc[:, 3].duplicated(keep=False)
-        | data_frame.iloc[:, 3].isin(historical_key)
-    ).map({True: 2, False: 1})
+    key_col = data_frame.columns[3]
+    key_count = data_frame[key_col].map(data_frame[key_col].value_counts())
+    key_in_list = data_frame[key_col].map(lambda value: historical_key.count(value))
+    data_frame[historical_df.columns[9]] = key_count + key_in_list
 
     data_frame[historical_df.columns[10]] = data_frame[data_frame.columns[1]].apply(
         lambda value: str(value).replace(",", "").replace(".", "").isdigit()
@@ -265,7 +268,7 @@ def report_inconsistencies(data_frame: pd.DataFrame) -> None:
             duplicados_exception_list.iloc[:, 0].dropna().astype(str).to_list()
         )
         radicados_inconsistencies: pd.DataFrame = data_frame[
-            data_frame.iloc[:, 8].astype(str) == "2"
+            data_frame.iloc[:, 8].astype(int) > 1
         ]
         radicados_inconsistencies = radicados_inconsistencies[
             ~radicados_inconsistencies.iloc[:, 1].isin(radicados_exception_list)
@@ -279,7 +282,7 @@ def report_inconsistencies(data_frame: pd.DataFrame) -> None:
             duplicados_exception_list.iloc[:, 1].dropna().astype(str).to_list()
         )
         key_inconsistencies: pd.DataFrame = data_frame[
-            data_frame.iloc[:, 9].astype(str) == "2"
+            data_frame.iloc[:, 9].astype(int) > 1
         ]
         key_inconsistencies = key_inconsistencies[
             ~key_inconsistencies.iloc[:, 3].isin(key_exception_list)
