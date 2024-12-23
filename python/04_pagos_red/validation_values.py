@@ -2,6 +2,7 @@ import pandas as pd  # type: ignore
 import numpy as np  # type: ignore
 from typing import Optional
 from datetime import datetime
+from openpyxl import load_workbook  # type: ignore
 
 
 class ValuesValidation:
@@ -294,17 +295,13 @@ def validate_values(acm_file: str) -> None:
         filled_df: pd.DataFrame = apply_formulas(merged_df, historical_df)
         # Report inconsistencies
         report_inconsistencies(filled_df)
-        # Concat data frames to save it into a temp file
-        final_df: pd.DataFrame = pd.concat(
-            [historical_df, filled_df], ignore_index=True
-        )
         # Save the final file into temp file folder
-        final_df.to_excel(
+        filled_df.to_excel(
             values_validation.temp_file,
             sheet_name=values_validation.sheet_name,
             index=False,
         )
-        return True, "Validación de valores realizada correctamente"
+        return True, f"Function '{validate_values.__name__}' executed successfully"
 
     except Exception as e:
         return False, f"Error: {e}"
@@ -428,7 +425,7 @@ if __name__ == "__main__":
         "exception_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Input\EXCEPCIONES BASE PAGOS RED ASISTENCIAL.xlsx",
         "sheet_name": "Propuesta",
         "file_name": "PROPUESTA DE PAGO (23-10-2024).xlsx",
-        "previous_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Output\Historico Pagos Red Asistencial\RED ASISTENCIAL 23102024.xlsx",
+        "previous_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Output\Validacion valores\Validacion valores 23102024.xlsx",
         "temp_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Temp\Pagos red asistencial 18122024.xlsx",
         "historic_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Input\VALIDADOR PAGOS.xlsx",
     }
