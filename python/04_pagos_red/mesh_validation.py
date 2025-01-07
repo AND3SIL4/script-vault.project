@@ -9,11 +9,13 @@ class MeshValidation:
         sheet_name: str,
         exception_file: str,
         inconsistencies_file: str,
+        acm_report: str,
     ):
         self.file_path = file_path
         self.sheet_name = sheet_name
         self.exception_file = exception_file
         self.inconsistencies_file = inconsistencies_file
+        self.acm_report = acm_report
 
     def read_excel(self, file_path: str, sheet_name: str) -> pd.DataFrame:
         """Method for returning a data frame"""
@@ -71,6 +73,15 @@ class MeshValidation:
         else:
             return "INFO: Validacion realizada, no se encontraron inconsistencias"
 
+    def transform_acm_report(self, acm_report: pd.DataFrame) -> pd.DataFrame:
+        """Method to transform the ACM report"""
+        acm_report: pd.DataFrame = acm_report.iloc[3:, 1:]
+        acm_report.columns = acm_report.iloc[0]
+        acm_report = acm_report.iloc[1:].reset_index(drop=True)
+        # Select only the columns needed
+        acm_report = acm_report[["id cuenta", "prefijo factura", "factura"]]
+        return acm_report
+
 
 mesh_validation: Optional[MeshValidation] = None
 
@@ -85,6 +96,7 @@ def main(params: dict) -> tuple:
                 sheet_name=params.get("sheet_name"),
                 exception_file=params.get("exception_file"),
                 inconsistencies_file=params.get("inconsistencies_file"),
+                acm_report=params.get("acm_report"),
             )
         return True, f"Atributos de clase '{main.__name__}' inicializados correctamente"
     except Exception as e:
@@ -256,10 +268,94 @@ def validate_spaces(col_idx: str) -> str:
         )
         # Validate if there is inconsistencies
         inconsistencies = data_frame[~data_frame["has_spaces"]].copy()
-        print(inconsistencies)
         return mesh_validation.validate_inconsistencies(
             inconsistencies, [col_idx], "ValidacionEspacios"
         )
+    except Exception as e:
+        return (False, f"Error: {e}")
+
+
+def validate_observaciones_col() -> str:
+    try:
+        # Get the PROPUESTA PAGOS data frame
+        data_frame: pd.DataFrame = mesh_validation.read_excel(
+            mesh_validation.file_path,
+            mesh_validation.sheet_name,
+        )
+        # Get the ACM report data frame
+        acm_df: pd.DataFrame = pd.read_excel(
+            mesh_validation.acm_report,
+            sheet_name="FCT_RS_REPORTE_WS_AUDITORIA",
+            engine="openpyxl",
+            dtype=str,
+        )
+        # Transform the data frame
+        df_transformed: pd.DataFrame = mesh_validation.transform_acm_report(acm_df)
+
+        # Get columns to make the merge
+        left_col = data_frame.columns[2]
+        right_col = df_transformed.columns[0]
+
+        # Set the columns type
+        data_frame[left_col] = data_frame[left_col].astype(str)
+        df_transformed[right_col] = df_transformed[right_col].astype(str)
+
+        # Merge the data frames
+        merged_df: pd.DataFrame = pd.merge(
+            data_frame,
+            df_transformed,
+            how="left",
+            left_on=left_col,
+            right_on=right_col,
+            suffixes=("_propuesta_pago", "_acm_report"),
+        )
+
+        # Subfunction to validate the key composed
+        def validate_key(
+            observaciones: str, prefijo_factura: str, id_factura: str
+        ) -> bool:
+            # Create a key composed
+            key: str = prefijo_factura + id_factura
+            # Validate if there is any NaN value and replace it
+            if "nan" in key:
+                key = key.replace("nan", "")
+
+            # Check if the key is the same as the observations value is
+            return key == observaciones
+
+        merged_df["is_valid"] = merged_df.apply(
+            lambda row: validate_key(
+                str(row[merged_df.columns[62]]),  # OBSERVACIONES
+                str(row[merged_df.columns[116]]),  # prefijo factura
+                str(row[merged_df.columns[117]]),  # factura
+            ),
+            axis=1,
+        )
+
+        # Validate if there is inconsistencies
+        inconsistencies = merged_df[~merged_df["is_valid"]].copy()
+
+        # Create a exception data frame
+        exception_df: pd.DataFrame = pd.read_excel(
+            mesh_validation.exception_file,
+            sheet_name="EXCEPCIONES GENERALES",
+            engine="openpyxl",
+            dtype=str,
+        )
+        # Get the exception list from the exception data frame
+        exception_list: list[str] = (
+            exception_df.iloc[:, 2].dropna().astype(str).to_list()
+        )
+        # Add the exception list to the inconsistencies data frame
+        inconsistencies["is_exception"] = inconsistencies.iloc[:, 2].isin(
+            exception_list
+        )
+        inconsistencies = inconsistencies[~inconsistencies["is_exception"]]
+        # Return the inconsistencies
+        return mesh_validation.validate_inconsistencies(
+            inconsistencies, [62, 116, 117], "ValidacionObservacionesCol"
+        )
+
     except Exception as e:
         return (False, f"Error: {e}")
 
@@ -270,10 +366,11 @@ if __name__ == "__main__":
         "sheet_name": "Propuesta",
         "exception_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Input\EXCEPCIONES BASE PAGOS RED ASISTENCIAL.xlsx",
         "inconsistencies_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Temp\InconsistenciasBasePagosRedAsistencial.xlsx",
+        "acm_report": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Temp\FCT_RS_REPORTE_WS_AUDITORIA.xlsx",
     }
     # Instance the main variables for the main class
     main_instance = main(params)
     print(main_instance)
 
     # Instance an alone function with its params to test it
-    print(validate_spaces("2"))
+    print(validate_observaciones_col())
