@@ -14,16 +14,15 @@ def main(params: dict):
         col_idx: int = int(params.get("col_idx"))
         cut_off_date: str = params.get("cut_off_date")
         inconsistencias_file: str = params.get("inconsistencias_file")
+        initial_date = params.get("initial_date")
 
         ##Validate if all the required inputs are present
         if not all([file_path, sheet_name, latest_file, inconsistencias_file]):
             return "ERROR: a required input is missing"
 
-        year = datetime.today().year
         cut_off_date = pd.to_datetime(cut_off_date, format="%d/%m/%Y")
         cut_date = cut_off_date - pd.DateOffset(months=1)
-        date = f"01/01/{year}"
-        initial_date = pd.to_datetime(date, format="%d/%m/%Y")
+        initial_date = pd.to_datetime(initial_date, format="%d/%m/%Y")
 
         # Load data frames
         current_df = load_excel(file_path, sheet_name)
@@ -230,6 +229,7 @@ if __name__ == "__main__":
         "col_idx": "44",
         "cut_off_date": "31/10/2024",
         "inconsistencias_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BaseObjetados_SabanaPagosBasesSiniestralidad\Temp\InconsistenciasBaseObjetados.xlsx",
+        "initial_date": "01/01/2024"
     }
 
     print(main(params))
