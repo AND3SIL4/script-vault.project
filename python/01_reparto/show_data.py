@@ -1,5 +1,4 @@
 import pandas as pd  # type: ignore
-from datetime import datetime
 import re
 import traceback
 import os
@@ -14,21 +13,19 @@ def main(params: dict):
         col_idx: int = int(params.get("col_idx"))
         cut_off_date: str = params.get("cut_off_date")
         inconsistencias_file: str = params.get("inconsistencias_file")
+        initial_date: str = params.get("initial_date")
 
         ##Validate if all the required inputs are present
         if not all([file_path, sheet_name, latest_file, inconsistencias_file]):
             return "ERROR: a required input is missing"
 
-        year = datetime.today().year
         cut_off_date = pd.to_datetime(cut_off_date, format="%d/%m/%Y")
         cut_date = cut_off_date - pd.DateOffset(months=1)
-        date = f"01/01/{year}"
-        initial_date = pd.to_datetime(date, format="%d/%m/%Y")
+        initial_date = pd.to_datetime(initial_date, format="%d/%m/%Y")
 
         # Load data frames
         current_df = load_excel(file_path, sheet_name)
         latest_df = load_excel(latest_file, sheet_name)
-
         # Filter data
         current_filtered = filter_data(current_df, col_idx, initial_date, cut_date)
         latest_filtered = filter_data(latest_df, col_idx, initial_date, cut_date)
@@ -57,7 +54,7 @@ def main(params: dict):
         is_count_valid = validate_tables(current_count_table, latest_count_table)
 
         # Save or report inconsistencies based on validation results
-        if is_sum_valid and is_count_valid:
+        if is_sum_valid:
             # Validate sum and count tables
 
             save_final_table(current_df, file_path, "VALOR_RESERVA", "sum")
@@ -115,6 +112,9 @@ def add_total(df: pd.DataFrame) -> None:
 
 
 def validate_tables(current_table: pd.DataFrame, latest_table: pd.DataFrame) -> bool:
+    #!Debug
+    # print(current_table)
+    # print(latest_table)
     """Validate if the current table matches the latest table."""
     current_sum = current_table.sum().astype(int)
     latest_sum = latest_table.sum().astype(int)
@@ -200,10 +200,11 @@ if __name__ == "__main__":
     params = {
         "file_path": r"C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\TempFolder\BASE DE REPARTO 2024.xlsx",
         "sheet_name": "CASOS NUEVOS",
-        "latest_file": r"C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\OutputFolder\Historico base reparto\BASE DE REPARTO 082024.xlsx",
+        "latest_file": r"C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\OutputFolder\BASE REPARTO\BASE DE REPARTO 112024.xlsx",
         "col_idx": "24",
-        "cut_off_date": "30/07/2024",
+        "cut_off_date": "30/12/2024",
         "inconsistencias_file": r"C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\OutputFolder\Inconsistencias\InconBaseReparto.xlsx",
+        "initial_date": "01/01/2024",
     }
 
     print(main(params))

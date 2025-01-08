@@ -1,4 +1,4 @@
-import pandas as pd #type: ignore
+import pandas as pd  # type: ignore
 import os
 
 
@@ -12,21 +12,14 @@ def main(params: dict):
         list_file = params.get("list_file")
 
         ##Set initial variables
-        if not all(
-            [
-                file_path,
-                col_idx,
-                inconsistencias_file,
-                sheet_name,
-                list_file
-            ]
-        ):
+        if not all([file_path, col_idx, inconsistencias_file, sheet_name, list_file]):
             return "ERROR: An input required param is missing"
 
         ##Read book using pandas
         df: pd.DataFrame = pd.read_excel(
             file_path, sheet_name=sheet_name, engine="openpyxl"
         )
+
         list_df: pd.DataFrame = pd.read_excel(
             list_file, sheet_name="COLUMNA CREDITO", engine="openpyxl"
         )
@@ -39,7 +32,7 @@ def main(params: dict):
                 list_df.iloc[:, 2].dropna().astype(str).values.tolist(),
                 str(row.iloc[15]),
                 str(row.iloc[6]),
-                list_df.iloc[:, 0].dropna().values.tolist()
+                list_df.iloc[:, 0].dropna().values.tolist(),
             ),
             axis=1,
         )
@@ -80,13 +73,14 @@ def main(params: dict):
     except Exception as e:
         return f"Error: {e}"
 
+
 def is_valid(
     value: str,
     mandatory: list[str],
     alpha_numeric: list[str],
     tomador: str,
     poliza: str,
-    list_exception: list[str]
+    list_exception: list[str],
 ) -> bool:
     """Validate the value based on the given rules"""
     ##Delete white spaces at the end and start of the string
@@ -94,18 +88,18 @@ def is_valid(
     ##Validate if the value is empty string
     if value == "":
         return False
-    
+
     ##Validate if the value is number
     if value.isdigit():
         return True
-    
+
     ##Validate NaN (Not a Number)
     if value.lower() == "nan":
         if (tomador not in mandatory) or (int(poliza) in list_exception):
             return True
         else:
             return False
-    
+
     ##Validate if the value is alphanumeric
     if value.isalnum():
         if tomador not in alpha_numeric:
@@ -116,6 +110,7 @@ def is_valid(
             return True
 
     return False
+
 
 def get_excel_column_name(n):
     """Convert a column number (1-based) to Excel column name (e.g., 1 -> A, 28 -> AB)."""
@@ -131,7 +126,7 @@ if __name__ == "__main__":
         "file_path": r"C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\TempFolder\BASE DE REPARTO 2024.xlsx",
         "col_idx": "98",
         "inconsistencias_file": r"C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\OutputFolder\Inconsistencias\InconBaseReparto.xlsx",
-        "list_file": r"C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\InputFolder\Listas - BOT.xlsx"
+        "list_file": r"C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\InputFolder\EXCEPCIONES BASE REPARTO.xlsx",
     }
 
     print(main(params))
