@@ -196,12 +196,42 @@ def apply_formulas(data_frame: pd.DataFrame, historical_df: pd.DataFrame) -> Non
     # Get the current year
     year = datetime.now().year
 
+    def ensure_sheet_exists(file_path: str, sheet_name: str) -> None:
+        try:
+            workbook = load_workbook(file_path)
+            # Verifica si la hoja ya existe
+            if sheet_name not in workbook.sheetnames:
+                # Si la hoja no existe, crea una nueva
+                new_sheet = workbook.create_sheet(sheet_name)
+                # Verifica si la hoja anterior existe
+                if (
+                    sheet_name != "Sheet1"
+                    and f"{int(sheet_name)-1}" in workbook.sheetnames
+                ):
+                    previous_sheet = workbook[f"{int(sheet_name)-1}"]
+                    # Copiar los encabezados de la hoja anterior
+                    for col in range(1, previous_sheet.max_column + 1):
+                        new_sheet.cell(
+                            row=1,
+                            column=col,
+                            value=previous_sheet.cell(row=1, column=col).value,
+                        )
+
+                workbook.save(file_path)
+                print(f"La hoja '{sheet_name}' se creó correctamente.")
+        except Exception as e:
+            print(e)
+
+    ensure_sheet_exists(values_validation.historic_file, str(year))
+
     # Sub function to validate if the "radicado" number starts with a different number aside current year
     def validate_previous_radicados(radicado: str) -> int:
+        print("One")
         current_radicado_year = radicado[:4]
         if current_radicado_year != str(year):
             previous_dfs: list[pd.DataFrame] = []
             for year_to_read in range(int(current_radicado_year), year + 1):
+                print("One one")
                 df: pd.DataFrame = values_validation.read_excel(
                     values_validation.historic_file, sheet_name=str(year_to_read)
                 )
@@ -213,10 +243,12 @@ def apply_formulas(data_frame: pd.DataFrame, historical_df: pd.DataFrame) -> Non
             return entire_list.count(radicado)
 
     def validate_previous_key(key: str) -> int:
+        print("Two")
         current_key_year = key[:4]
         if current_key_year != str(year):
             previous_dfs: list[pd.DataFrame] = []
             for year_to_read in range(int(current_key_year), year + 1):
+                print("Two two")
                 df: pd.DataFrame = values_validation.read_excel(
                     values_validation.historic_file, sheet_name=str(year_to_read)
                 )
@@ -420,12 +452,12 @@ def main(params: dict) -> bool:
 
 if __name__ == "__main__":
     params = {
-        "file_path": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Input\PROPUESTA DE PAGO (23-10-2024).xlsx",
+        "file_path": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Input\PROPUESTA DE PAGO 1 Y 2  (02-01-2025).xlsx",
         "inconsistencies_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Temp\InconsistenciasBasePagosRedAsistencial.xlsx",
         "exception_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Input\EXCEPCIONES BASE PAGOS RED ASISTENCIAL.xlsx",
         "sheet_name": "Propuesta",
-        "file_name": "PROPUESTA DE PAGO (23-10-2024).xlsx",
-        "previous_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Output\Validacion valores\Validacion valores 23102024.xlsx",
+        "file_name": "PROPUESTA DE PAGO 1 Y 2  (02-01-2025).xlsx",
+        "previous_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Output\Validacion valores\Validacion valores 04122024.xlsx",
         "temp_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Temp\Pagos red asistencial 18122024.xlsx",
         "historic_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Input\VALIDADOR PAGOS.xlsx",
     }

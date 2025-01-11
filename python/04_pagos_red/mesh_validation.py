@@ -1,5 +1,5 @@
 import pandas as pd  # type: ignore
-from typing import Optional
+from typing import Optional, Tuple
 
 
 class MeshValidation:
@@ -82,6 +82,75 @@ class MeshValidation:
         acm_report = acm_report[["id cuenta", "prefijo factura", "factura"]]
         return acm_report
 
+    def validate_vs_coaseguro(
+        self, data_frame: pd.DataFrame, column1: int, column2: int, sheet_name: str
+    ) -> Tuple[bool, str]:
+        """Method to validate the tipo expedición poliza"""
+        # Validate if the dataframe is empty
+        if data_frame.empty:
+            return False
+
+        try:
+            # If the validation made is a number type then convert to integers and the string to validate
+            if column1 == 16:
+                data_frame.iloc[:, column1] = (
+                    data_frame.iloc[:, column1].astype(int).astype(str)
+                )
+            # Validate if the tipo expedición poliza is correct
+            data_frame["is_valid"] = data_frame.apply(
+                lambda row: str(row.iloc[column1]) == str(row.iloc[column2]), axis=1
+            )
+            # Validate inconsistencies
+            inconsistencies: pd.DataFrame = data_frame[~data_frame["is_valid"]].copy()
+            report_inconsistencies = self.validate_inconsistencies(
+                inconsistencies, [column1, column2], sheet_name
+            )
+            print(report_inconsistencies)
+            return (True, "Validacion realizada correctamente")
+        except Exception as e:
+            return (False, str(e))
+
+    def validate_sum_percentage(
+        self, data_frame: pd.DataFrame, positiva: int, coaseguradora: int
+    ) -> Tuple[bool, str]:
+        """Method to validate the sum of the percentages"""
+        try:
+            data_frame["percentage_valid"] = data_frame.apply(
+                lambda row: row.iloc[positiva] + row.iloc[coaseguradora] == 1, axis=1
+            )
+            # Validate inconsistencies
+            inconsistencies: pd.DataFrame = data_frame[
+                ~data_frame["percentage_valid"]
+            ].copy()
+            report_inconsistencies = self.validate_inconsistencies(
+                inconsistencies, [positiva, coaseguradora], "ValidacionPorcentajes"
+            )
+            print(report_inconsistencies)
+            return (True, "Validacion realizada correctamente")
+        except Exception as e:
+            return (False, str(e))
+
+    def validate_positiva_plus_movimiento(
+        self, data_frame: pd.DataFrame, vr_movimiento: int, positiva_percentage: int
+    ) -> Tuple[bool, str]:
+        """Method to validate the sum of the VR movimiento and the positiva percentage"""
+        try:
+            data_frame["is_valid"] = data_frame.apply(
+                lambda row: row.iloc[vr_movimiento] * row.iloc[positiva_percentage] > 0,
+                axis=1,
+            )
+            # Validate inconsistencies
+            inconsistencies: pd.DataFrame = data_frame[~data_frame["is_valid"]].copy()
+            report_inconsistencies = self.validate_inconsistencies(
+                inconsistencies,
+                [vr_movimiento, positiva_percentage],
+                "ValidacionVRMovimiento",
+            )
+            print(report_inconsistencies)
+            return (True, "Validacion realizada correctamente")
+        except Exception as e:
+            return (False, str(e))
+
 
 mesh_validation: Optional[MeshValidation] = None
 
@@ -128,23 +197,31 @@ def validate_is_number(col_idx: str) -> str:
 
 
 def validate_date_type(col_idx: str) -> str:
-    """Method to validate if a column index is a date"""
+    """Method to validate if a column index contains date values."""
     try:
+        # Convert column index to integer
         col_idx = int(col_idx)
+
+        # Read the Excel file into a DataFrame
         data_frame: pd.DataFrame = mesh_validation.read_excel(
             mesh_validation.file_path,
             mesh_validation.sheet_name,
         )
+
+        # Attempt to convert the column to datetime
         data_frame["is_date"] = pd.to_datetime(
             data_frame.iloc[:, col_idx], errors="coerce"
-        )
-        # Validate if there is inconsistencies
+        ).notna()
+
+        # Find inconsistencies (non-date values)
         inconsistencies = data_frame[~data_frame["is_date"]]
+
+        # Validate and return the result
         return mesh_validation.validate_inconsistencies(
             inconsistencies, [col_idx], "ValidacionValorTipoFecha"
         )
     except Exception as e:
-        return (False, f"Error: {e}")
+        return f"Error: {e}"
 
 
 def validate_siniestro_number() -> str:
@@ -360,9 +437,173 @@ def validate_observaciones_col() -> str:
         return (False, f"Error: {e}")
 
 
+def validate_coaseguro_sheet() -> Tuple[bool, str]:
+    try:
+        # Get main data frame
+        propuesta_df: pd.DataFrame = mesh_validation.read_excel(
+            mesh_validation.file_path,
+            mesh_validation.sheet_name,
+        )
+        # Get COASEGURO data frame
+        coaseguro_df: pd.DataFrame = mesh_validation.read_excel(
+            mesh_validation.exception_file,
+            "COASEGURO",
+        )
+        # Get only the important columns from coaseguro data frame
+        # The first 6 columns with data
+        coaseguro_df = coaseguro_df.iloc[:, :6]
+
+        # Merge the data frames using the key: N° poliza
+        # N° poliza propuesta pagos: index 6
+        # N° poliza coaseguro sheet: index 0
+        merged_df: pd.DataFrame = pd.merge(
+            propuesta_df,
+            coaseguro_df,
+            how="left",
+            left_on=propuesta_df.columns[6],
+            right_on=coaseguro_df.columns[0],
+            suffixes=("_propuesta", "_coaseguro"),
+        )
+
+        # * Validate "TIPO EXPEDICIÓN PÓLIZA"
+        bool_tipo_exp, msg_tipo_exp = mesh_validation.validate_vs_coaseguro(
+            merged_df, 42, 120, "ValidacionTipoExpedicionPoliza"
+        )
+        if not bool_tipo_exp:
+            raise Exception(msg_tipo_exp)
+
+        # * Validate "TOMADOR"
+        bool_tomador, msg_tomador = mesh_validation.validate_vs_coaseguro(
+            merged_df, 15, 116, "ValidacionTomadorCoaseguro"
+        )
+        if not bool_tomador:
+            raise Exception(msg_tomador)
+
+        # * Validate "TOMADOR"
+        bool_doc_tomador, msg_doc_tomador = mesh_validation.validate_vs_coaseguro(
+            merged_df, 16, 117, "ValidacionDocumentoTomador"
+        )
+        if not bool_doc_tomador:
+            raise Exception(msg_doc_tomador)
+
+        # * Validate sum of coaseguro POSITIVA PERCENTAGE AND COASEGURADORA PERCENTAGE
+        bool_sum_coaseguro, msg_sum_coaseguro = mesh_validation.validate_sum_percentage(
+            merged_df, 48, 50  # PORCENTAJE POSITIVA  # PORCENTAJE COASEGURADORA
+        )
+        if not bool_sum_coaseguro:
+            raise Exception(msg_sum_coaseguro)
+
+        # * Validate Valor Positiva MOVIMIENTO x %
+        bool_val_positiva, msg_val_positiva = (
+            mesh_validation.validate_positiva_plus_movimiento(
+                merged_df, vr_movimiento=45, positiva_percentage=118
+            )
+        )
+        if not bool_val_positiva:
+            raise Exception(msg_val_positiva)
+
+        return (True, "Validacion con hoja COASEGURO realizada correctamente")
+    except Exception as e:
+        return (False, f"Error: {e}")
+
+
+def validate_empty(incomes: dict) -> Tuple[bool, str]:
+    try:
+        # Set local variables
+        col = int(incomes.get("col"))
+        is_empty: bool = incomes.get("is_empty")
+        sheet_name: str = ""
+        # Read the excel file
+        df: pd.DataFrame = mesh_validation.read_excel(
+            mesh_validation.file_path,
+            sheet_name=mesh_validation.sheet_name,
+        )
+        if is_empty:
+            # Check if the column must be empty
+            df["is_valid"] = df.iloc[:, col].isna()
+            sheet_name = "ValidacionColumnasVacias"
+        else:
+            # Check if the column must not be empty
+            df["is_valid"] = ~df.iloc[:, col].isna()
+            sheet_name = "ValidacionColumnasNoVacias"
+
+        # Validate inconsistencies
+        inconsistencies = df[~df["is_valid"]].copy()
+        print(inconsistencies)
+        # Return the inconsistencies
+        return mesh_validation.validate_inconsistencies(
+            inconsistencies, [col], sheet_name=sheet_name
+        )
+    except Exception as e:
+        return (False, f"Error: {e}")
+
+
+def validate_using_list(incomes: dict) -> Tuple[bool, str]:
+    try:
+        # Set local variables
+        col = int(incomes.get("col"))
+        exception_sheet = incomes.get("exception_sheet")
+        exception_col_name = incomes.get("exception_col_name")
+        inconsistencies_sheet_name = incomes.get("inconsistencies_sheet_name")
+
+        # Get main data frame
+        df: pd.DataFrame = mesh_validation.read_excel(
+            mesh_validation.file_path,
+            sheet_name=mesh_validation.sheet_name,
+        )
+        # Get the list of the exception
+        exception_df: list[str] = mesh_validation.read_excel(
+            mesh_validation.exception_file,
+            sheet_name=exception_sheet,
+        )
+        exception_list: list[str] = (
+            exception_df[exception_col_name].dropna().astype(str).to_list()
+        )
+
+        # Check if the column must be in the exception list
+        df["is_valid"] = df.iloc[:, col].isin(exception_list)
+        # Validate inconsistencies
+        inconsistencies = df[~df["is_valid"]].copy()
+        print(inconsistencies)
+        # Return the inconsistencies
+        return mesh_validation.validate_inconsistencies(
+            inconsistencies, col, sheet_name=inconsistencies_sheet_name
+        )
+
+    except Exception as e:
+        return (False, f"Error: {e}")
+
+
+def validate_length(incomes: dict) -> Tuple[bool, str]:
+    try:
+        # Set local variables
+        col = int(incomes.get("col"))
+        length = int(incomes.get("length"))
+
+        data_frame: pd.DataFrame = mesh_validation.read_excel(
+            mesh_validation.file_path,
+            sheet_name=mesh_validation.sheet_name,
+        )
+
+        data_frame["is_valid"] = data_frame.iloc[:, col].apply(
+            lambda x: len(str(x)) == length,
+        )
+
+        # Validate inconsistencies
+        inconsistencies = data_frame[~data_frame["is_valid"]].copy()
+        print(inconsistencies)
+        # Return the inconsistencies
+        return mesh_validation.validate_inconsistencies(
+            inconsistencies, col, sheet_name="ValidacionLongitudColumna"
+        )
+
+        pass
+    except Exception as e:
+        return (False, f"Error: {e}")
+    
 if __name__ == "__main__":
     params = {
-        "file_path": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Input\PROPUESTA DE PAGO (23-10-2024).xlsx",
+        "file_path": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Input\PROPUESTA DE PAGO 1 Y 2  (02-01-2025).xlsx",
         "sheet_name": "Propuesta",
         "exception_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Input\EXCEPCIONES BASE PAGOS RED ASISTENCIAL.xlsx",
         "inconsistencies_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Temp\InconsistenciasBasePagosRedAsistencial.xlsx",
@@ -372,5 +613,9 @@ if __name__ == "__main__":
     main_instance = main(params)
     print(main_instance)
 
+    incomes = {
+        "col": "2",
+        "length" : "17"
+    }
     # Instance an alone function with its params to test it
-    print(validate_observaciones_col())
+    print(validate_length(incomes))

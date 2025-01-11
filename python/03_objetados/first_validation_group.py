@@ -430,19 +430,21 @@ class FirstValidationGroup:
         )
 
         ## Sub function to validate the expiration date
-        def validate_date(ramo: str, expiration_date: str) -> bool:
+        def validate_date(radicado: str, ramo: str, expiration_date: str) -> bool:
             if ramo == "DESEMPLEO":
                 return (
                     bool(re.search(r"^\d{2}/\d{2}/\d{4};\d{1,12}$", expiration_date))
-                    or expiration_date in list_fecha
+                    or (expiration_date in list_fecha)
+                    or radicado in exception_list
                 )
             else:
-                return (expiration_date == "nan") or ramo in exception_list
+                return (expiration_date == "nan") or (radicado in exception_list)
 
         data_frame["is_valid"] = data_frame.apply(
             lambda row: validate_date(
-                str(row.iloc[12]),  ## Ramo
-                str(row.iloc[97]),  ## Fecha vencimiento
+                str(row.iloc[2]),  # Radicado casa matriz
+                str(row.iloc[12]),  # Ramo
+                str(row.iloc[97]),  # Fecha vencimiento
             ),  # Ramo
             axis=1,
         )
