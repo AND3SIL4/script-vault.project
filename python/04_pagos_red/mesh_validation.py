@@ -298,8 +298,7 @@ def validate_poliza_number() -> str:
         )
         # Validate if there is inconsistencies
         data_frame["is_poliza_number_valid"] = data_frame.iloc[:, col_idx].apply(
-            lambda poliza: str(poliza).startswith("331")
-            or str(poliza).startswith("335")
+            lambda poliza: str(poliza).startswith("31") or str(poliza).startswith("35")
         )
         inconsistencies = data_frame[~data_frame["is_poliza_number_valid"]].copy()
         # Create a exception data frame
@@ -549,23 +548,23 @@ def validate_using_list(incomes: dict) -> Tuple[bool, str]:
         inconsistencies_sheet_name = incomes.get("inconsistencies_sheet_name")
 
         # Get main data frame
-        df: pd.DataFrame = mesh_validation.read_excel(
-            mesh_validation.file_path,
-            sheet_name=mesh_validation.sheet_name,
+        df: pd.DataFrame = pd.read_excel(
+            mesh_validation.file_path, sheet_name=mesh_validation.sheet_name, dtype=str
         )
+        df =  df.dropna(subset=[df.columns[col]])
         # Get the list of the exception
         exception_df: list[str] = pd.read_excel(
-            mesh_validation.exception_file,
-            sheet_name=exception_sheet,
+            mesh_validation.exception_file, sheet_name=exception_sheet, dtype=str
         )
         exception_list: list[str] = (
             exception_df[exception_col_name].dropna().astype(str).to_list()
         )
+        print(exception_list)
         # Check if the column must be in the exception list
         df["is_valid"] = df.iloc[:, col].isin(exception_list)
         # Validate inconsistencies
         inconsistencies = df[~df["is_valid"]].copy()
-        print(inconsistencies)
+        print(inconsistencies.iloc[:, col])
         # Return the inconsistencies
         return mesh_validation.validate_inconsistencies(
             inconsistencies, col, sheet_name=inconsistencies_sheet_name
@@ -655,10 +654,10 @@ if __name__ == "__main__":
     print(main_instance)
 
     incomes = {
-        "col": "47",
+        "col": "11",
         "exception_sheet": "LISTAS",
-        "exception_col_name": "COMPAÑIA COASEGURADORA",
+        "exception_col_name": "CODIGO DE RAMO SAP",
         "inconsistencies_sheet_name": "VV",
     }
     # Instance an alone function with its params to test it
-    print(validate_observaciones_col())
+    print(validate_using_list(incomes))
