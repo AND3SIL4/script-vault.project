@@ -4,18 +4,26 @@ import os
 
 def main(params: dict) -> str:
     try:
-        ##Set the initial variables
+        # Set the initial variables
         file_path: str = params.get("file_path")
         sheet_name: str = params.get("sheet_name")
         inconsistencies_file: str = params.get("inconsistencies_file")
         exception_file: str = params.get("exception_file")
         sheet_exception: str = params.get("sheet_exception")
 
-        ##Validate if all the required inputs are present
-        if not all([file_path, sheet_name, inconsistencies_file]):
+        # Validate if all the required inputs are present
+        if not all(
+            [
+                file_path,
+                sheet_name,
+                inconsistencies_file,
+                exception_file,
+                sheet_exception,
+            ]
+        ):
             return "ERROR: an input required param is missing"
 
-        ##Read the work books
+        # Read the work books
         base: pd.DataFrame = pd.read_excel(
             file_path, sheet_name=sheet_name, engine="openpyxl"
         )
@@ -23,10 +31,10 @@ def main(params: dict) -> str:
             exception_file, sheet_name=sheet_exception, engine="openpyxl"
         )
 
-        ##Replace the NaN values with 0 in column "Credito"
+        # Replace the NaN values with 0 in column "Credito"
         base.iloc[:, 98] = base.iloc[:, 98].fillna(0)
 
-        ##Create imaginary key to make the validation
+        # Create imaginary key to make validation
         base["KEY_1"] = base.iloc[:, 0].astype(str) + "-" + base.iloc[:, 2].astype(str)
         base["KEY_2"] = base["KEY_1"] + "-" + base.iloc[:, 32].astype(str)
         base["KEY_3"] = base["KEY_2"] + "-" + base.iloc[:, 34].astype(str)
@@ -47,7 +55,7 @@ def main(params: dict) -> str:
             + base.iloc[:, 98].astype(str)
         )
 
-        ##Keys validation
+        # Keys validation
         validation = base[
             (base["KEY_1"].duplicated(keep=False))
             & (base["KEY_2"].duplicated(keep=False))
@@ -67,9 +75,8 @@ def main(params: dict) -> str:
             & (~validation["KEY_6"].isin(exception_df["KEY_6"]))
             & (~validation["KEY_7"].isin(exception_df["KEY_7"]))
         ]
-
-        print(inconsistencies)  ##!Comment
-        ##Append inconsistencies into the file
+        print(inconsistencies)  #!Comment
+        # Append inconsistencies into the file
         return validate_empty_df(
             inconsistencies_file, "ValidacionLlaves", inconsistencies
         )
@@ -143,7 +150,7 @@ def get_excel_column_name(n):
 
 if __name__ == "__main__":
     params = {
-        "file_path": r"C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\TempFolder\BASE DE REPARTO 2024.xlsx",
+        "file_path": r"C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\InputFolder\BASE DE REPARTO 2025.xlsx",
         "sheet_name": "CASOS NUEVOS",
         "inconsistencies_file": r"C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\OutputFolder\Inconsistencias\InconBaseReparto.xlsx",
         "exception_file": r"C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\InputFolder\EXCEPCIONES BASE REPARTO.xlsx",

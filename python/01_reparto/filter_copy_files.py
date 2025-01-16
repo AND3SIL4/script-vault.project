@@ -36,9 +36,12 @@ def main(params):
         # Open file using pandas
         df = pd.read_excel(file_path, engine="openpyxl", sheet_name=sheet_name)
         otros_gastos = pd.read_excel(file_path, sheet_name="OGDS", engine="openpyxl")
+        # Normalize columns
+        df = df.iloc[:, :111]
+        otros_gastos = otros_gastos.iloc[:, :111]
+
         ## Assign the columns of the first data frame
         otros_gastos.columns = df.columns
-        
         df: pd.DataFrame = pd.concat([df, otros_gastos], ignore_index=True)
 
         # Convert the column to datetime using the column index
@@ -54,21 +57,21 @@ def main(params):
 
         # Copy to temp file to make validations
         filter_file.to_excel(temp_file, index=False, sheet_name=sheet_name)
-        return "SUCCESS: file copied successfully"
+        return (True, "SUCCESS: file copied successfully")
 
     except Exception as e:
-        return f"Error: {e}"
+        return (False, f"ERROR: {e}")
 
 
 if __name__ == "__main__":
     params = {
         # Set variables
-        "file_path": r"C:/ProgramData/AutomationAnywhere/Bots/Logs/AD_RCSN_SabanaPagosYBasesParaSinestralidad/InputFolder/BASE DE REPARTO 2024.xlsx",
+        "file_path": r"C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\InputFolder\BASE DE REPARTO 2025.xlsx",
         "sheet_name": "CASOS NUEVOS",
-        "temp_file": r"C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\TempFolder\BASE DE REPARTO 2024.xlsx",
-        "start_date_input": "01/01/2024",
+        "temp_file": r"C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\TempFolder\BASE DE REPARTO 2025.xlsx",
+        "start_date_input": "01/01/2025",
         "column_index": "24",
-        "cut_off_date": "30/06/2024",
+        "cut_off_date": "09/01/2025",
     }
 
     print(main(params))

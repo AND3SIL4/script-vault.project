@@ -1,7 +1,6 @@
 import pandas as pd  # type: ignore
 import numpy as np  # type: ignore
 from typing import Optional
-import os
 from openpyxl import load_workbook  # type: ignore
 
 
@@ -12,69 +11,19 @@ class Consecutivo:
         self,
         file_path: str,
         sheet_name: str,
-        inconsistencies_file: str,
         exception_file: str,
         consecutivo_sap_file: str,
+        consecutivo_sheet: str
     ):
         self.path_file = file_path
         self.sheet_name = sheet_name
-        self.inconsistencies_file = inconsistencies_file
         self.exception_file = exception_file
         self.consecutivo_sap_file = consecutivo_sap_file
+        self.consecutivo_sheet = consecutivo_sheet
 
     def read_excel(self, file_path: str, sheet_name: str) -> pd.DataFrame:
         """Method for returning a data frame"""
         return pd.read_excel(file_path, sheet_name=sheet_name, engine="openpyxl")
-
-    def save_inconsistencies_file(self, df: pd.DataFrame, new_sheet: str) -> bool:
-        if os.path.exists(self.inconsistencies_file):
-            with pd.ExcelFile(self.inconsistencies_file, engine="openpyxl") as xls:
-                if new_sheet in xls.sheet_names:
-                    existing = pd.read_excel(
-                        xls, engine="openpyxl", sheet_name=new_sheet
-                    )
-                    df = pd.concat([existing, df], ignore_index=True)
-
-            with pd.ExcelWriter(
-                self.inconsistencies_file,
-                engine="openpyxl",
-                mode="a",
-                if_sheet_exists="replace",
-            ) as writer:
-                df.to_excel(writer, sheet_name=new_sheet, index=False)
-                return True
-        else:
-            return False
-
-    def excel_col_name(self, number) -> str:
-        """Method to convert (1-based) to Excel column name"""
-        result = ""
-        while number > 0:
-            number, reminder = divmod(number - 1, 26)
-            result = chr(65 + reminder) + result
-        return result
-
-    def validate_inconsistencies(
-        self, df: pd.DataFrame, col_idx, sheet_name: str
-    ) -> str:
-        """Method to validate the inconsistencies before append in a inconsistencies file"""
-        if not df.empty:
-            df = df.copy()
-            if isinstance(col_idx, int):
-                df[f"COORDENADAS"] = df.apply(
-                    lambda row: f"{self.excel_col_name(col_idx + 1)}{row.name + 2}",
-                    axis=1,
-                )
-            else:
-                for i in col_idx:
-                    df[f"COORDENADAS_{i + 2}"] = df.apply(
-                        lambda row: f"{self.excel_col_name(i + 1)}{row.name + 2}",
-                        axis=1,
-                    )
-            self.save_inconsistencies_file(df, sheet_name)
-            return "SUCCESS: Inconsistencies guardadas correctamente"
-        else:
-            return "INFO: Validacion realizada, no se encontraron inconsistencias"
 
     def filter_file(
         self, data_frame: pd.DataFrame, cut_off_date: str, col_idx: int
@@ -102,143 +51,168 @@ class Consecutivo:
 
         return filtered_df  # Return the filtered DataFrame
 
+    def update_data(
+        self, consecutivo_inicial: int, consecutivo_final: int, lista_consecutivos: list
+    ) -> None:
+        try:
+
+            # Cargar el archivo existente
+            book = load_workbook(self.exception_file)
+            sheet = book["CONSECUTIVO SAP"]
+
+            # Limpiar los datos antiguos en la columna 1 (consecutivos pendientes)
+            max_row = sheet.max_row  # Obtiene el número máximo de filas usadas
+            for row in range(2, max_row + 1):  # Empieza en la fila 2
+                sheet.cell(row=row, column=5).value = None  # Borra los valores antiguos
+
+            # Actualizar valores
+            sheet.cell(row=2, column=6).value = (
+                consecutivo_inicial  # Consecutivo inicial
+            )
+            sheet.cell(row=2, column=7).value = consecutivo_final  # Consecutivo final
+
+            # Actualizar lista de consecutivos pendientes
+            row = 1
+            for consecutivo in lista_consecutivos:
+                row += 1
+                sheet.cell(row=row, column=5).value = consecutivo
+
+            # Guardar cambios
+            book.save(self.exception_file)
+            return True
+        except Exception as e:
+            print(f"ERROR {e}")
+            return False
+
     def consecutivo(self, cut_off_date: str) -> str:
-        ## Pagos data frame
+        # Pagos data frame
         pagos_file: pd.DataFrame = self.read_excel(self.path_file, self.sheet_name)
-        ## Consecutivo data frame
+        # Consecutivo data frame
         consecutivo_file: pd.DataFrame = self.read_excel(
-            self.consecutivo_sap_file, "NUEMRO DE PAGO"
+            self.consecutivo_sap_file, self.consecutivo_sheet
         )
-        ## Information from EXCEPTION FILE
+        # Information from EXCEPTION FILE
         list_df: pd.DataFrame = self.read_excel(self.exception_file, "CONSECUTIVO SAP")
-        ## Consecutivo data frame after being filtered
+        # Consecutivo data frame after being filtered
         consecutivo_df = self.filter_file(consecutivo_file, cut_off_date, 0)
-        ## Pagos data frame after being filtered
+        # Pagos data frame after being filtered
         pagos_df = self.filter_file(pagos_file, cut_off_date, 72)
 
-        ##* Local variables
-        initial_consecutivo: int = int(list_df.iloc[0, 1])
+        # Initial variables (consecutivo final, consecutivos faltantes)
         final_consecutivo: int = int(list_df.iloc[0, 2])
-        ## List of values from the EXCEPTION FILE TODO: Validate first
+
+        lista_drive: list[int] = consecutivo_df.iloc[:, 1].astype(int).to_list()
+        # Remove the final consecutivo if it's in the drive list
+        if final_consecutivo in lista_drive:
+            lista_drive.remove(final_consecutivo)
+
+        # List of values from the EXCEPTION FILE TODO: Validate first
         pending_list: list[int] = list_df.iloc[:, 0].dropna().astype(int).to_list()
-        ## List of values from PAGOS FILE without duplicates
-        consecutivos_pagos: list = pagos_df.iloc[:, 73].drop_duplicates().to_list()
 
-        ## 1. Make validation of pending list first
-        for pending_value in pending_list:
-            if pending_value in consecutivos_pagos:
-                print(f"Valor pendiente {pending_value} encontrado en PAGOS")
-                consecutivos_pagos.remove(pending_value)
-                pending_list.remove(pending_value)
+        # List of values from PAGOS FILE without duplicates
+        consecutivos_pagos: list = (
+            pagos_df.iloc[:, 73].drop_duplicates().astype(int).to_list()
+        )
 
-        ## Size of the total different values after deleting matching values
-        length_consecutivo_pagos = int(len(consecutivos_pagos))
-        ## Get the list with autoincrement (+1) starts from before final consecutivo
+        # 1. Check the pending list before make validation
+        # Create a copy of data frames in order to do not affect the origins
+        consecutivos_pagos_copy = consecutivos_pagos.copy()
+        pending_list_copy = pending_list.copy()
+
+        pending_list = [
+            consecutivo
+            for consecutivo in pending_list
+            if consecutivo not in consecutivos_pagos_copy
+        ]
+        consecutivos_pagos = [
+            consecutivo
+            for consecutivo in consecutivos_pagos
+            if consecutivo not in pending_list_copy
+        ]
+
+        # Size of the total different values after deleting matching values
+        # length: int = len(consecutivo_df) - len(pending_list_copy)
+
+        # Get the list with autoincrement (+1) starts from before final consecutivo
         consecutivos_to_validate: list[int] = []
-        for consecutivo in range(length_consecutivo_pagos):
+
+        # # Fill up the list with autoincrement (+1) starts from before final consecutivo
+        # for consecutivo in range(length):
+        #     final_consecutivo += 1
+        #     consecutivos_to_validate.append(final_consecutivo)
+
+        while True:
+            # Check the final consecutivo to validate
+            if lista_drive[-1] == final_consecutivo:
+                break
             final_consecutivo += 1
             consecutivos_to_validate.append(final_consecutivo)
 
-        ## Create new data frames to cross over files
-        consecutivo_cross: pd.DataFrame = pd.DataFrame(
-            consecutivos_to_validate, columns=["CONSECUTIVO_FROM_CONSECUTIVO"]
+        missing_consecutivos = [
+            value
+            for value in consecutivos_to_validate
+            if value not in consecutivos_pagos
+        ]
+
+        # Create a data frame with consecutivos missing
+        missing_consecutivos_df: pd.DataFrame = pd.DataFrame(
+            missing_consecutivos, columns=["CONSECUTIVOS MISSING"]
         )
-        consecutivo_pagos_cross: pd.DataFrame = pd.DataFrame(
-            consecutivos_pagos, columns=["CONSECUTIVO_FROM_PAGOS"]
+        # Merge files to get all data
+        missing_consecutivos_df: pd.DataFrame = missing_consecutivos_df.merge(
+            consecutivo_df,
+            left_on=missing_consecutivos_df.columns[0],
+            right_on=consecutivo_df.columns[1],
+            how="left",
         )
 
-        ## Cross files
-        consecutivo_from_consecutivo_merged: pd.DataFrame = consecutivo_cross.merge(
-            consecutivo_df,
-            left_on=consecutivo_cross.columns[0],
-            right_on=consecutivo_df.columns[1],
-            how="left",
-        )
-        consecutivos_from_pagos_merged: pd.DataFrame = consecutivo_pagos_cross.merge(
-            consecutivo_df,
-            left_on=consecutivo_pagos_cross.columns[0],
-            right_on=consecutivo_df.columns[1],
-            how="left",
-        )
-        ## Add a column to indicate if the consecutivo from consecutivo is in the consecutivo from pagos
-        consecutivo_from_consecutivo_merged["is_valid"] = (
-            consecutivo_from_consecutivo_merged.iloc[:, 0].isin(
-                consecutivos_from_pagos_merged.iloc[:, 0]
-            )
-        )
-        ## Filter the cases that does not match
-        inconsistencies_validation: pd.DataFrame = consecutivo_from_consecutivo_merged[
-            ~consecutivo_from_consecutivo_merged["is_valid"]
+        # If the records are associated to RED ASISTENCIAL i must'nt take in count
+        final_df: pd.DataFrame = missing_consecutivos_df[
+            missing_consecutivos_df.iloc[:, 3] != "RED ASISTENCIAL"
         ]
-        ## Don't take in count "RED ASISTENCIAL" in inconsistencies
-        inconsistencies_validation = inconsistencies_validation[
-            inconsistencies_validation.iloc[:, 3] != "RED ASISTENCIAL"
-        ]
-        append_list = (
-            pending_list + inconsistencies_validation.iloc[:, 0].dropna().to_list()
-        )
-        print(consecutivos_pagos)
+
+        # Create a list to write into the exception file
+        append_list = pending_list + final_df.iloc[:, 0].dropna().to_list()
+
+        print("Values pending to append in inconsistencies list:", append_list)
+
         data_updated: bool = self.update_data(
-            consecutivos_pagos[0], consecutivos_pagos[-1], append_list
+            consecutivos_to_validate[0], consecutivos_to_validate[-1], append_list
         )
-        ## Save the inconsistencies
+        # Save the information into the file
         return (
-            self.validate_inconsistencies(
-                inconsistencies_validation, 73, "ValidacionConsecutivo"
+            (
+                ("Archivo excepciones actualizado correctamente")
+                if data_updated
+                else ("Error al actualizar el archivo de excepciones")
             ),
             data_updated,
         )
 
-    def update_data(
-        self, consecutivo_inicial: int, consecutivo_final: int, lista_consecutivos: list
-    ) -> None:
-        # Cargar el archivo existente
-        book = load_workbook(self.exception_file)
-        sheet = book["CONSECUTIVO SAP"]
 
-        # Limpiar los datos antiguos en la columna 1 (consecutivos pendientes)
-        max_row = sheet.max_row  # Obtiene el número máximo de filas usadas
-        for row in range(2, max_row + 1):  # Empieza en la fila 2
-            sheet.cell(row=row, column=1).value = None  # Borra los valores antiguos
-
-        # Actualizar valores
-        sheet.cell(row=2, column=2).value = consecutivo_inicial  # Consecutivo inicial
-        sheet.cell(row=2, column=3).value = consecutivo_final  # Consecutivo final
-
-        # Actualizar lista de consecutivos pendientes
-        row = 1
-        for consecutivo in lista_consecutivos:
-            row += 1
-            sheet.cell(row=row, column=1).value = consecutivo
-
-        # Guardar cambios
-        book.save(self.exception_file)
-        return True
-
-
-##* INITIALIZE THE VARIABLE TO INSTANCE THE MAIN CLASS
+# * INITIALIZE THE VARIABLE TO INSTANCE THE MAIN CLASS
 consecutivo: Optional[Consecutivo] = None
 
 
-##* CALL THE MAIN FUNCTION WITH THE MAIN PARAMS
+# * CALL THE MAIN FUNCTION WITH THE MAIN PARAMS
 def main(params: dict) -> bool:
     try:
         global consecutivo
 
-        ## Get the variables
+        # Get the variables
         file_path: str = params.get("file_path")
         sheet_name: str = params.get("sheet_name")
-        inconsistencies_file: str = params.get("inconsistencies_file")
         exception_file: str = params.get("exception_file")
         consecutivo_sap_file: str = params.get("consecutivo_sap_file")
+        consecutivo_sheet: str = params.get("consecutivo_sheet")
 
-        ## Pass the values to the constructor in the main class
+        # Pass the values to the constructor in the main class
         consecutivo = Consecutivo(
             file_path,
             sheet_name,
-            inconsistencies_file,
             exception_file,
             consecutivo_sap_file,
+            consecutivo_sheet
         )
         return True
     except Exception as e:
@@ -247,7 +221,7 @@ def main(params: dict) -> bool:
 
 def validate_consecutivo_sap(params: dict) -> str:
     try:
-        ## Set local variables
+        # Set local variables
         cut_off_date: str = params.get("cut_off_date")
         validation: str = consecutivo.consecutivo(cut_off_date)
         return validation
@@ -259,10 +233,10 @@ if __name__ == "__main__":
     params = {
         "file_path": r"C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\TempFolder\BASE DE PAGOS.xlsx",
         "sheet_name": "PAGOS",
-        "inconsistencies_file": r"C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\OutputFolder\Inconsistencias\InconBasePagos.xlsx",
         "exception_file": r"C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\InputFolder\EXCEPCIONES BASE PAGOS.xlsx",
         "consecutivo_sap_file": r"C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\InputFolder\CONSECUTIVO SAP 2023.xlsx",
+        "consecutivo_sheet" : "NUMERO DE PAGOO"
     }
-    main(params)
-    params = {"cut_off_date": "30/10/2024"}
+    print(main(params))
+    params = {"cut_off_date": "29/11/2024"}
     print(validate_consecutivo_sap(params))

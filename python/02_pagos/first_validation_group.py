@@ -92,6 +92,7 @@ class FirstValidationGroup:
         data_frame: pd.DataFrame = self.read_excel(self.path_file, self.sheet_name)
         exception_df: pd.DataFrame = self.read_excel(self.exception_file, "LISTAS")
         list_exception: list = exception_df["SAP"].dropna().astype(str).tolist()
+        print(list_exception)
 
         def validate_with_exception_list(value: str) -> bool:
             value = value.replace(".", "")
@@ -367,20 +368,16 @@ class FirstValidationGroup:
 
         ## Sub function to validate
         def validation(desempleo: str, character: str) -> bool:
-            ramos: list[str] = ["DESEMPLEO"]
-            maybe: list[str] = ["VIDA GRUPO DEUDORES"]
-            is_desempleo = desempleo in ramos
+            tomadores_allowed: list[str] = ["FONDO NACIONAL DEL AHORRO"]
+            is_desempleo = desempleo in tomadores_allowed
             is_valid_character = character == "SI" or character == "NO"
             first_validation = is_desempleo and is_valid_character
             second_validation = not is_desempleo and character == "nan"
-            third_validation = (desempleo in maybe and is_valid_character) or (
-                desempleo in maybe and character == "nan"
-            )
-            return first_validation or second_validation or third_validation
+            return first_validation or second_validation
 
         data_frame["is_valid"] = data_frame.apply(
             lambda row: validation(
-                str(row.iloc[12]),  # Ramo
+                str(row.iloc[15]),  # Tomador column
                 str(row.iloc[col_idx]),  # Special column
             ),
             axis=1,
@@ -465,26 +462,19 @@ class FirstValidationGroup:
 
     def sap(self) -> str:
         data_frame: pd.DataFrame = self.read_excel(self.path_file, self.sheet_name)
-        exception_df: pd.DataFrame = self.read_excel(
-            self.exception_file, "OTRAS EXCEPCIONES"
-        )
-        exception_list: list[str] = (
-            exception_df.iloc[:, 4].dropna().astype(str).to_list()
-        )
+        exception_df: pd.DataFrame = self.read_excel(self.exception_file, "LISTAS")
+        exception_list: list[str] = exception_df["SAP"].dropna().astype(str).to_list()
 
         ## Sub function for making the validation
-        def validate_number(radicado: str, sap: str) -> bool:
+        def validate_number(sap: str) -> bool:
             try:
                 int(sap)
                 return True
             except ValueError:
-                return radicado in exception_list
+                return sap in exception_list
 
         data_frame["is_valid"] = data_frame.apply(
-            lambda row: validate_number(
-                str(row.iloc[2]),  # Radicado
-                str(row.iloc[77]),  # SAP
-            ),
+            lambda row: validate_number(str(row.iloc[77])),
             axis=1,
         )
         inconsistencies: pd.DataFrame = data_frame[~data_frame["is_valid"]]
@@ -492,12 +482,7 @@ class FirstValidationGroup:
 
     def otros_documentos(self) -> str:
         data_frame: pd.DataFrame = self.read_excel(self.path_file, self.sheet_name)
-        polizas: list[str] = [
-            "3400004306",
-            "3400003706",
-            "3400004407",
-            "3400003704",
-        ]
+        polizas: list[str] = ["3400004306", "3400003706", "3400003704", "3400004407"]
         allowed: list[str] = ["SI", "NO", "NA"]
         data_frame = data_frame[data_frame.iloc[:, 11].astype(str) == "334"]
 
@@ -832,8 +817,5 @@ if __name__ == "__main__":
         "inconsistencies_file": r"C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\OutputFolder\Inconsistencias\InconBasePagos.xlsx",
         "exception_file": r"C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\InputFolder\EXCEPCIONES BASE PAGOS.xlsx",
     }
-    main(params)
-    params = {
-        "col_idx": "77",
-    }
-    print(validate_identification_pagos_iaxis())
+    print(main(params))
+    print(validate_sap())

@@ -1,5 +1,6 @@
-import pandas as pd #type: ignore
+import pandas as pd  # type: ignore
 import os
+
 
 def main(params: dict):
     try:
@@ -16,14 +17,12 @@ def main(params: dict):
 
         # Read book using pandas
         df = pd.read_excel(file_path, sheet_name=sheet_name, engine="openpyxl")
-
         # Filter information and validate if the current data is number type
-        df["is_number"] = df.iloc[:, col_idx].astype(str).apply(lambda x: is_number(x, is_null))
-
+        df["is_number"] = df.iloc[:, col_idx].apply(
+            lambda value: str(value).replace(",", "").replace(".", "").isdigit()
+        )
         # Add inconsistencies to a filtered data frame
         filtered_file = df[~df["is_number"]].copy()
-
-        print(filtered_file)
 
         # Return and store the result
         if filtered_file.empty:
@@ -59,21 +58,6 @@ def main(params: dict):
         return f"Error: {e}"
 
 
-def is_number(value: str, is_null: bool):
-    if is_null:
-        if value.strip() == "" or value.lower() == "nan":
-            return True
-        else:
-            return False
-    else:
-        try:
-            ##Try to convert the current value to know if is a number
-            int(value)
-            return True
-        except:
-            return False
-
-
 def get_excel_column_name(n):
     """Convert a column number (1-based) to Excel column name (e.g., 1 -> A, 28 -> AB)."""
     result = ""
@@ -85,10 +69,10 @@ def get_excel_column_name(n):
 
 if __name__ == "__main__":
     params = {
-        "file_path": "C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\TempFolder\BASE DE REPARTO 2024.xlsx",
-        "inconsistencias_file": "C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\OutputFolder\Inconsistencias\InconBaseReparto.xlsx",
-        "col_idx": "63",
+        "file_path": r"C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\TempFolder\BASE DE REPARTO 2025.xlsx",
+        "inconsistencias_file": r"C:\ProgramData\AutomationAnywhere\Bots\Logs\AD_RCSN_SabanaPagosYBasesParaSinestralidad\OutputFolder\INCONSISTENCIAS\InconBaseReparto.xlsx",
+        "col_idx": "34",
         "sheet_name": "CASOS NUEVOS",
-        "is_null": True,
+        "is_null": False,
     }
     print(main(params))
