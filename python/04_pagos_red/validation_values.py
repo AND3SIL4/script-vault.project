@@ -80,9 +80,9 @@ class ValuesValidation:
                         axis=1,
                     )
             self.save_inconsistencies_file(df, sheet_name)
-            return "Success: Inconsistencies guardadas correctamente"
+            return "SUCCESS: Inconsistencies guardadas correctamente"
         else:
-            return "Info: Validacion realizada, no se encontraron inconsistencias"
+            return "INFO: Validacion realizada, no se encontraron inconsistencias"
 
     def get_file_date(self) -> str:
         """Method to get the file date"""
@@ -96,6 +96,138 @@ class ValuesValidation:
             return file_date
         else:
             return "Error obteniendo fecha"
+
+    def load_all_sheets(self) -> dict[str, pd.DataFrame]:
+        """Method to load all the sheet into the 'Validador pagos' file
+        and return a dictionary with the data frames for each sheet"""
+        sheets = pd.read_excel(self.historic_file, sheet_name=None, engine="openpyxl")
+        return sheets
+
+    def ensure_sheet_exists(self, file_path: str, sheet_name: str) -> None:
+        """Function to validate if the new sheet is in 'Validador pagos' file
+        if the sheet does not exist, then it will be created"""
+        try:
+            workbook = load_workbook(file_path)
+            # Verifica si la hoja ya existe
+            if sheet_name not in workbook.sheetnames:
+                # Si la hoja no existe, crea una nueva
+                new_sheet = workbook.create_sheet(sheet_name)
+                # Verifica si la hoja anterior existe
+                if (
+                    sheet_name != "Sheet1"
+                    and f"{int(sheet_name)-1}" in workbook.sheetnames
+                ):
+                    previous_sheet = workbook[f"{int(sheet_name)-1}"]
+                    # Copiar los encabezados de la hoja anterior
+                    for col in range(1, previous_sheet.max_column + 1):
+                        new_sheet.cell(
+                            row=1,
+                            column=col,
+                            value=previous_sheet.cell(row=1, column=col).value,
+                        )
+
+                workbook.save(file_path)
+                return True, f"Sheet {sheet_name} created successfully"
+            return True, "Sheet is already exist"
+        except Exception as e:
+            return False, f"Error {e}"
+
+    def validate_previous_counter(
+        self, value: str, year: int, index: int, df_by_year: dict[str, pd.DataFrame]
+    ) -> int:
+        current_radicado_year = int(
+            value[:4]
+        )  # Convierte el año a entero para comparación
+        if current_radicado_year != year:
+            # Filtrar los DataFrames por los años relevantes
+            relevant_years = range(current_radicado_year, year + 1)
+            previous_dfs = []
+
+            for y in relevant_years:
+                # Solo accedemos a las hojas que están dentro del rango de años
+                if str(y) in df_by_year:
+                    # Filtramos las filas de la columna relevante (por índice) y convertimos a str
+                    relevant_df = df_by_year[str(y)]
+                    previous_dfs.append(relevant_df)
+
+            entire_df: pd.DataFrame = pd.concat(previous_dfs, ignore_index=True)
+            key_column_list: list[str] = (
+                entire_df.iloc[:, index]
+                .dropna()
+                .astype(str)
+                .str.replace(" -", "")
+                .to_list()
+            )
+            counter: int = key_column_list.count(value)
+            # print(f"{value} is: {counter} times year {current_radicado_year} - {year}")
+            # Return the amount of values in the historical key list
+            return counter
+        return 0
+
+    def save_inconsistencies(
+        self,
+        data_frame: pd.DataFrame,
+        exception_sheet_name: str,
+        exception_col_idx: int,
+        validation_col_idx: int,
+        col_idx_to_except: int,
+        inconsistencies_sheet_name: str,
+    ) -> str:
+        # 1. Values validation
+        valores_exception_df: pd.DataFrame = values_validation.read_excel(
+            values_validation.exception_file, exception_sheet_name
+        )
+        valores_exception_list: list[str] = (
+            valores_exception_df.iloc[:, exception_col_idx]
+            .dropna()
+            .astype(str)
+            .to_list()
+        )
+        valores_inconsistencies: pd.DataFrame = data_frame[
+            ~data_frame.iloc[:, validation_col_idx]
+        ]
+        valores_inconsistencies = valores_inconsistencies[
+            ~valores_inconsistencies.iloc[:, col_idx_to_except].isin(
+                valores_exception_list
+            )
+        ]
+        # Save the inconsistencies
+        values_validation.validate_inconsistencies(
+            valores_inconsistencies,
+            [col_idx_to_except, validation_col_idx],
+            inconsistencies_sheet_name,
+        )
+
+    def save_inconsistencies_values(
+        self,
+        data_frame: pd.DataFrame,
+        exception_sheet_name: str,
+        exception_col: int,
+        validation_col: int,
+        list_col: int,
+        inconsistencies_sheet_name: str,
+    ) -> str:
+        duplicados_exception_list: pd.DataFrame = values_validation.read_excel(
+            values_validation.exception_file, exception_sheet_name
+        )
+        radicados_exception_list: list[str] = (
+            duplicados_exception_list.iloc[:, exception_col]
+            .dropna()
+            .astype(str)
+            .to_list()
+        )
+        radicados_inconsistencies: pd.DataFrame = data_frame[
+            data_frame.iloc[:, validation_col].astype(int) > 1
+        ]
+        radicados_inconsistencies = radicados_inconsistencies[
+            ~radicados_inconsistencies.iloc[:, list_col].isin(radicados_exception_list)
+        ]
+        # Save the inconsistencies
+        values_validation.validate_inconsistencies(
+            radicados_inconsistencies,
+            [list_col, validation_col],
+            inconsistencies_sheet_name,
+        )
 
 
 # Instance the main class
@@ -146,24 +278,14 @@ def cross_file(propuesta_df: pd.DataFrame, acm_df: pd.DataFrame) -> pd.DataFrame
 
 def apply_formulas(data_frame: pd.DataFrame, historical_df: pd.DataFrame) -> None:
     """Method to apply formulas to the merged data frame"""
-    # Get the list of the historical report
-    historical_radicados: list[str] = (
-        historical_df.iloc[:, 1].dropna().astype(str).to_list()
-    )
-    historical_key: list[str] = historical_df.iloc[:, 3].dropna().astype(str).to_list()
-
     # Convertir columnas a valores numéricos
     columns_to_convert = ["Valor Liquidado", "valor aprobado", "VR. MOVIMIENTO 100%"]
-    for column in columns_to_convert:
-        data_frame[column] = (
-            data_frame[column]
-            .str.replace(",", "")
-            .str.replace(".", "")
-            .str.replace(" ", "")
-        )
-        data_frame[column] = pd.to_numeric(data_frame[column], errors="coerce").fillna(
-            0
-        )
+    data_frame[columns_to_convert] = (
+        data_frame[columns_to_convert]
+        .replace({",": "", ".": ""}, regex=True)
+        .apply(pd.to_numeric, errors="coerce")
+        .fillna(0)
+    )
 
     # Aplicar fórmulas
     data_frame[historical_df.columns[6]] = (
@@ -177,10 +299,20 @@ def apply_formulas(data_frame: pd.DataFrame, historical_df: pd.DataFrame) -> Non
 
     # Validate records duplicates
     ## Radicado column
-    add_number_of_duplicates(data_frame, historical_df, historical_radicados, 1, 8)
+    add_number_of_duplicates(
+        data_frame=data_frame,
+        historical_df=historical_df,
+        index_col=1,
+        historical_index_col=8,
+    )
 
     ## Key column: (radicado number + concepto value)
-    add_number_of_duplicates(data_frame, historical_df, historical_key, 3, 9)
+    add_number_of_duplicates(
+        data_frame=data_frame,
+        historical_df=historical_df,
+        index_col=3,
+        historical_index_col=9,
+    )
 
     # Validate format values in columns
     data_frame[historical_df.columns[10]] = data_frame[data_frame.columns[1]].apply(
@@ -191,84 +323,39 @@ def apply_formulas(data_frame: pd.DataFrame, historical_df: pd.DataFrame) -> Non
     )
 
     data_frame[historical_df.columns[12]] = values_validation.get_file_date()
-
-    # Validate if the "radicado" number starts with a different number of year
     # Get the current year
     year = datetime.now().year
 
-    def ensure_sheet_exists(file_path: str, sheet_name: str) -> None:
-        try:
-            workbook = load_workbook(file_path)
-            # Verifica si la hoja ya existe
-            if sheet_name not in workbook.sheetnames:
-                # Si la hoja no existe, crea una nueva
-                new_sheet = workbook.create_sheet(sheet_name)
-                # Verifica si la hoja anterior existe
-                if (
-                    sheet_name != "Sheet1"
-                    and f"{int(sheet_name)-1}" in workbook.sheetnames
-                ):
-                    previous_sheet = workbook[f"{int(sheet_name)-1}"]
-                    # Copiar los encabezados de la hoja anterior
-                    for col in range(1, previous_sheet.max_column + 1):
-                        new_sheet.cell(
-                            row=1,
-                            column=col,
-                            value=previous_sheet.cell(row=1, column=col).value,
-                        )
-
-                workbook.save(file_path)
-                print(f"La hoja '{sheet_name}' se creó correctamente.")
-        except Exception as e:
-            print(e)
-
-    ensure_sheet_exists(values_validation.historic_file, str(year))
-
-    # Sub function to validate if the "radicado" number starts with a different number aside current year
-    def validate_previous_radicados(radicado: str) -> int:
-        print("One")
-        current_radicado_year = radicado[:4]
-        if current_radicado_year != str(year):
-            previous_dfs: list[pd.DataFrame] = []
-            for year_to_read in range(int(current_radicado_year), year + 1):
-                print("One one")
-                df: pd.DataFrame = values_validation.read_excel(
-                    values_validation.historic_file, sheet_name=str(year_to_read)
-                )
-                previous_dfs.append(df)
-            entire_df: pd.DataFrame = pd.concat(previous_dfs, ignore_index=True)
-            entire_list: list[str] = (
-                entire_df[entire_df.columns[1]].dropna().astype(str).to_list()
-            )
-            return entire_list.count(radicado)
-
-    def validate_previous_key(key: str) -> int:
-        print("Two")
-        current_key_year = key[:4]
-        if current_key_year != str(year):
-            previous_dfs: list[pd.DataFrame] = []
-            for year_to_read in range(int(current_key_year), year + 1):
-                print("Two two")
-                df: pd.DataFrame = values_validation.read_excel(
-                    values_validation.historic_file, sheet_name=str(year_to_read)
-                )
-                previous_dfs.append(df)
-            entire_df: pd.DataFrame = pd.concat(previous_dfs, ignore_index=True)
-            key_column_list: list[str] = (
-                entire_df.iloc[:, 3].str.replace(" -", "").astype(str).to_list()
-            )
-            # Return the amount of values in the historical key list
-            return key_column_list.count(key)
-
-    data_frame["is_previous_key"] = data_frame.apply(
-        lambda row: validate_previous_key(str(row.iloc[3])),
-        axis=1,
+    # Validate if the new sheet exist and created
+    sheet_created = values_validation.ensure_sheet_exists(
+        file_path=values_validation.historic_file, sheet_name=str(year)
     )
-    data_frame["is_previous_radicado"] = data_frame.apply(
-        lambda row: validate_previous_radicados(str(row.iloc[1])),
-        axis=1,
-    )
+    if not sheet_created:
+        raise Exception("Error creating the sheet name into 'Validador Pagos' file")
 
+    # Load all sheets only one time
+    df_by_year = values_validation.load_all_sheets()
+
+    # Get the radicado column
+    valores_columna = data_frame.iloc[:, 1].astype(str)
+
+    # Create a new column with the results
+    data_frame["is_previous_radicado"] = [
+        values_validation.validate_previous_counter(
+            value=valor, year=year, index=1, df_by_year=df_by_year
+        )
+        for valor in valores_columna
+    ]
+    #  Get the key column
+    valores_columna = data_frame.iloc[:, 3].astype(str)
+
+    #  Create a new column with the results
+    data_frame["is_previous_key"] = [
+        values_validation.validate_previous_counter(
+            value=valor, year=year, index=3, df_by_year=df_by_year
+        )
+        for valor in valores_columna
+    ]
     # Sum the previous radicado in previous years
     data_frame[historical_df.columns[8]] = data_frame[historical_df.columns[8]].astype(
         int
@@ -280,7 +367,7 @@ def apply_formulas(data_frame: pd.DataFrame, historical_df: pd.DataFrame) -> Non
 
     # Ignore no needed temp columns
     data_frame = data_frame.iloc[:, :13]
-    print(data_frame)  # <-- this is the final data frame
+    # print(data_frame)  # <-- this is the final data frame
     # Set up unique columns
     data_frame.columns = historical_df.columns
     return data_frame
@@ -289,15 +376,13 @@ def apply_formulas(data_frame: pd.DataFrame, historical_df: pd.DataFrame) -> Non
 def add_number_of_duplicates(
     data_frame: pd.DataFrame,
     historical_df: pd.DataFrame,
-    previous_list: list,
     index_col: int,
     historical_index_col: int,
 ) -> None:
     ## Key column: (radicado number + concepto value)
     key_col = data_frame.columns[index_col]
     key_count = data_frame[key_col].map(data_frame[key_col].value_counts())
-    key_in_list = data_frame[key_col].map(lambda value: previous_list.count(value))
-    data_frame[historical_df.columns[historical_index_col]] = key_count + key_in_list
+    data_frame[historical_df.columns[historical_index_col]] = key_count
 
 
 def validate_values(acm_file: str) -> None:
@@ -342,86 +427,50 @@ def validate_values(acm_file: str) -> None:
 def report_inconsistencies(data_frame: pd.DataFrame) -> None:
     """Method to generate a report of inconsistencies and save it into tbe correct file"""
     try:
-        # 1. Valores validation
-        valores_exception_df: pd.DataFrame = values_validation.read_excel(
-            values_validation.exception_file, "VALIDACION VALORES"
-        )
-        valores_exception_list: list[str] = (
-            valores_exception_df.iloc[:, 0].dropna().astype(str).to_list()
-        )
-        valores_inconsistencies: pd.DataFrame = data_frame[~data_frame.iloc[:, 7]]
-        valores_inconsistencies = valores_inconsistencies[
-            ~valores_inconsistencies.iloc[:, 3].isin(valores_exception_list)
-        ]
-        # Save the inconsistencies
-        values_validation.validate_inconsistencies(
-            valores_inconsistencies, [3, 7], "ValidacionValores"
+        # 1. Values validation
+        values_validation.save_inconsistencies(
+            data_frame=data_frame,
+            exception_sheet_name="VALIDACION VALORES",
+            exception_col_idx=0,
+            validation_col_idx=7,
+            col_idx_to_except=3,
+            inconsistencies_sheet_name="ValidacionValores",
         )
         # 2. Radicados number duplicated
-        duplicados_exception_list: pd.DataFrame = values_validation.read_excel(
-            values_validation.exception_file, "VALIDACION DUPLICADOS"
-        )
-        radicados_exception_list: list[str] = (
-            duplicados_exception_list.iloc[:, 0].dropna().astype(str).to_list()
-        )
-        radicados_inconsistencies: pd.DataFrame = data_frame[
-            data_frame.iloc[:, 8].astype(int) > 1
-        ]
-        radicados_inconsistencies = radicados_inconsistencies[
-            ~radicados_inconsistencies.iloc[:, 1].isin(radicados_exception_list)
-        ]
-        # Save the inconsistencies
-        values_validation.validate_inconsistencies(
-            radicados_inconsistencies, [1, 8], "ValidacionRadicadosDuplicados"
+        values_validation.save_inconsistencies_values(
+            data_frame=data_frame,
+            exception_sheet_name="VALIDACION DUPLICADOS",
+            exception_col=0,
+            validation_col=8,
+            list_col=1,
+            inconsistencies_sheet_name="ValidacionRadicadosDuplicados",
         )
         # 3. Key duplicated
-        key_exception_list: list[str] = (
-            duplicados_exception_list.iloc[:, 1].dropna().astype(str).to_list()
-        )
-        key_inconsistencies: pd.DataFrame = data_frame[
-            data_frame.iloc[:, 9].astype(int) > 1
-        ]
-        key_inconsistencies = key_inconsistencies[
-            ~key_inconsistencies.iloc[:, 3].isin(key_exception_list)
-        ]
-        # Save the inconsistencies
-        values_validation.validate_inconsistencies(
-            key_inconsistencies, [3, 9], "ValidacionKeyDuplicados"
+        values_validation.save_inconsistencies_values(
+            data_frame=data_frame,
+            exception_sheet_name="VALIDACION DUPLICADOS",
+            exception_col=1,
+            validation_col=9,
+            list_col=3,
+            inconsistencies_sheet_name="ValidacionKeyDuplicados",
         )
         # 4. Radicado format
-        format_exception_df: pd.DataFrame = values_validation.read_excel(
-            values_validation.exception_file, "VALIDACION FORMATOS"
-        )
-        radicados_format_exception_list: list[str] = (
-            format_exception_df.iloc[:, 0].dropna().astype(str).to_list()
-        )
-        radicados_format_inconsistencies: pd.DataFrame = data_frame[
-            ~data_frame.iloc[:, 10].astype(bool)
-        ]
-        radicados_format_inconsistencies = radicados_format_inconsistencies[
-            ~radicados_format_inconsistencies.iloc[:, 3].isin(
-                radicados_format_exception_list
-            )
-        ]
-        # Save the inconsistencies
-        values_validation.validate_inconsistencies(
-            radicados_format_inconsistencies, [3, 10], "ValidacionRadicadoFormato"
+        values_validation.save_inconsistencies(
+            data_frame=data_frame,
+            exception_sheet_name="VALIDACION FORMATOS",
+            exception_col_idx=0,
+            validation_col_idx=10,
+            col_idx_to_except=3,
+            inconsistencies_sheet_name="ValidacionRadicadoFormato",
         )
         # 5. Valor 100% format
-        valor_100_format_exception_list: list[str] = (
-            format_exception_df.iloc[:, 1].dropna().astype(str).to_list()
-        )
-        valor_100_format_inconsistencies: pd.DataFrame = data_frame[
-            ~data_frame.iloc[:, 11].astype(bool)
-        ]
-        valor_100_format_inconsistencies = valor_100_format_inconsistencies[
-            ~valor_100_format_inconsistencies.iloc[:, 2].isin(
-                valor_100_format_exception_list
-            )
-        ]
-        # Save the inconsistencies
-        values_validation.validate_inconsistencies(
-            valor_100_format_inconsistencies, [2, 11], "ValidacionValor100Formato"
+        values_validation.save_inconsistencies(
+            data_frame=data_frame,
+            exception_sheet_name="VALIDACION FORMATOS",
+            exception_col_idx=1,
+            validation_col_idx=11,
+            col_idx_to_except=2,
+            inconsistencies_sheet_name="ValidacionValor100Formato",
         )
         return True
     except Exception as e:
@@ -461,6 +510,6 @@ if __name__ == "__main__":
         "temp_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Temp\Pagos red asistencial 18122024.xlsx",
         "historic_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Input\VALIDADOR PAGOS.xlsx",
     }
-    main(params)
+    print(main(params))
     incomes = r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Temp\FCT_RS_REPORTE_WS_AUDITORIA.xlsx"
     print(validate_values(incomes))
