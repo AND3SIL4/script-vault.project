@@ -1,5 +1,4 @@
 import pandas as pd  # type: ignore
-import numpy as np  # type: ignore
 from typing import Optional
 from datetime import datetime
 from openpyxl import load_workbook  # type: ignore
@@ -173,7 +172,6 @@ class ValuesValidation:
         col_idx_to_except: int,
         inconsistencies_sheet_name: str,
     ) -> str:
-        # 1. Values validation
         valores_exception_df: pd.DataFrame = values_validation.read_excel(
             values_validation.exception_file, exception_sheet_name
         )
@@ -207,14 +205,11 @@ class ValuesValidation:
         list_col: int,
         inconsistencies_sheet_name: str,
     ) -> str:
-        duplicados_exception_list: pd.DataFrame = values_validation.read_excel(
+        exception_df: pd.DataFrame = values_validation.read_excel(
             values_validation.exception_file, exception_sheet_name
         )
         radicados_exception_list: list[str] = (
-            duplicados_exception_list.iloc[:, exception_col]
-            .dropna()
-            .astype(str)
-            .to_list()
+            exception_df.iloc[:, exception_col].dropna().astype(str).to_list()
         )
         radicados_inconsistencies: pd.DataFrame = data_frame[
             data_frame.iloc[:, validation_col].astype(int) > 1
@@ -356,6 +351,7 @@ def apply_formulas(data_frame: pd.DataFrame, historical_df: pd.DataFrame) -> Non
         )
         for valor in valores_columna
     ]
+
     # Sum the previous radicado in previous years
     data_frame[historical_df.columns[8]] = data_frame[historical_df.columns[8]].astype(
         int

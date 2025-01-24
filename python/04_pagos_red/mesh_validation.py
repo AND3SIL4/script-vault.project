@@ -17,10 +17,10 @@ class MeshValidation:
         self.inconsistencies_file = inconsistencies_file
         self.acm_report = acm_report
 
-    def read_excel(self, file_path: str, sheet_name: str) -> pd.DataFrame:
+    def read_excel(self, file_path: str, sheet_name: str, **kwargs) -> pd.DataFrame:
         """Method for returning a data frame"""
         data_frame: pd.DataFrame = pd.read_excel(
-            file_path, sheet_name=sheet_name, engine="openpyxl"
+            file_path, sheet_name=sheet_name, engine="openpyxl", **kwargs
         )
         # Get the data frame using the name of the column with the index 2
         # To avoid the NaN into data frame with the aim the next validations
@@ -232,6 +232,7 @@ def validate_siniestro_number() -> str:
         data_frame: pd.DataFrame = mesh_validation.read_excel(
             mesh_validation.file_path,
             mesh_validation.sheet_name,
+            dtype={"No. SINIESTRO": str},
         )
 
         # Subfunction to validate multiple columns that make up the siniestro column
@@ -281,6 +282,7 @@ def validate_siniestro_number() -> str:
             exception_list
         )
         inconsistencies = inconsistencies[~inconsistencies["is_exception"]]
+        print(inconsistencies)
         return mesh_validation.validate_inconsistencies(
             inconsistencies, [col_idx], "ValidacionNumeroSiniestro"
         )
@@ -533,7 +535,7 @@ def validate_empty(incomes: dict) -> Tuple[bool, str]:
         print(inconsistencies)
         # Return the inconsistencies
         return mesh_validation.validate_inconsistencies(
-            inconsistencies, [col], sheet_name=sheet_name
+            inconsistencies, col, sheet_name=sheet_name
         )
     except Exception as e:
         return (False, f"Error: {e}")
@@ -551,7 +553,7 @@ def validate_using_list(incomes: dict) -> Tuple[bool, str]:
         df: pd.DataFrame = pd.read_excel(
             mesh_validation.file_path, sheet_name=mesh_validation.sheet_name, dtype=str
         )
-        df =  df.dropna(subset=[df.columns[col]])
+        df = df.dropna(subset=[df.columns[col]])
         # Get the list of the exception
         exception_df: list[str] = pd.read_excel(
             mesh_validation.exception_file, sheet_name=exception_sheet, dtype=str
@@ -643,7 +645,7 @@ def validate_coaseguradora() -> str:
 
 if __name__ == "__main__":
     params = {
-        "file_path": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Input\PROPUESTA DE PAGO 1 Y 2  (02-01-2025).xlsx",
+        "file_path": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Input\PROPUESTA DE PAGO (20-01-2025).xlsx",
         "sheet_name": "Propuesta",
         "exception_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Input\EXCEPCIONES BASE PAGOS RED ASISTENCIAL.xlsx",
         "inconsistencies_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Temp\InconsistenciasBasePagosRedAsistencial.xlsx",
@@ -654,10 +656,10 @@ if __name__ == "__main__":
     print(main_instance)
 
     incomes = {
-        "col": "11",
+        "col": "92",
         "exception_sheet": "LISTAS",
-        "exception_col_name": "CODIGO DE RAMO SAP",
+        "exception_col_name": "TIPOS DE DOCUMENTOS",
         "inconsistencies_sheet_name": "VV",
     }
     # Instance an alone function with its params to test it
-    print(validate_using_list(incomes))
+    print(validate_siniestro_number())

@@ -18,9 +18,10 @@ def update_validador_pagos_file(params: dict) -> tuple:
 
         # Read the validador_pagos_file using pandas
         temp_df: pd.DataFrame = pd.read_excel(temp_file, "Propuesta", engine="openpyxl")
-
+        print(temp_df)
         # Get only the needed columns from data frame
         temp_df = temp_df.iloc[:, :4]
+        print(temp_df)
 
         # Load workbook
         book = load_workbook(validador_pagos_file)
@@ -94,15 +95,15 @@ def update_final_file(params: dict) -> tuple:
 
 
 if __name__ == "__main__":
-    # params = {
-    #     "validador_pagos_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Input\VALIDADOR PAGOS - copia.xlsx",
-    #     "temp_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Temp\Pagos red asistencial 18122024.xlsx",
-    # }
-
     params = {
-        "values_validation_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Temp\Pagos red asistencial 18122024.xlsx",
-        "historical_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Output\Validacion valores\Validacion valores 23102024.xlsx",
-        "final_path": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Output\Validacion valores\Validacion valores 23122024.xlsx",
+        "validador_pagos_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Input\VALIDADOR PAGOS - copia.xlsx",
+        "temp_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Temp\Validacion valores 20012025.xlsx",
     }
 
-    print(update_final_file(params))
+    # params = {
+    #     "values_validation_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Temp\Pagos red asistencial 18122024.xlsx",
+    #     "historical_file": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Output\Validacion valores\Validacion valores 23102024.xlsx",
+    #     "final_path": r"C:\ProgramData\AutomationAnywhere\Bots\AD_GI_BasePagosRedAsistencial_SabanaPagosBasesSiniestralidad\Output\Validacion valores\Validacion valores 23122024.xlsx",
+    # }
+
+    print(update_validador_pagos_file(params))
