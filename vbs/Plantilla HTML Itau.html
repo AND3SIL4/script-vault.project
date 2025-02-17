@@ -1,0 +1,96 @@
+"<!DOCTYPE html>
+<html lang=""es"">
+  <head>
+    <meta charset=""UTF-8"" />
+    <meta http-equiv=""X-UA-Compatible"" content=""IE=edge"" />
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"" />
+    <title>Notificación de Email</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #f4f4f4;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      }
+      .email-container {
+        margin: 30px auto;
+        width: 600px;
+        background-color: #ffffff;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.25);
+      }
+      .header {
+        padding: 20px;
+        text-align: center;
+      }
+      .header img {
+        width: 100px;
+        height: auto;
+      }
+      .header span {
+        display: block;
+        font-size: 36px;
+        color: #ff6200;
+        font-weight: bold;
+      }
+      .body {
+        padding: 20px;
+        color: #333333;
+        font-size: 18px;
+        text-align: left;
+      }
+      .body p {
+        color: #666666;
+        font-size: 16px;
+        margin-bottom: 20px;
+      }
+      .body img {
+        display: block;
+        margin: 20px auto;
+        max-width: 100%;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.15);
+      }
+      .footer {
+        background-color: #212529;
+        color: #ffffff;
+        text-align: center;
+        padding: 10px;
+        font-size: 15px;
+        border-radius: 0 0 8px 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <center>
+      <table class=""email-container"">
+        <tr>
+          <td class=""header"">
+            <img  src=""https://banco.itau.co/documents/d/corporate/itaucorporate_logo_340x340"">
+            <span>Banco Itaú</span>
+          </td>
+        </tr>
+        <tr>
+          <td class=""body"">
+            
+              Cordial saludo, estimados/as. <br /><br />
+              RPA-Notificación Automática: Se adjunta Archivo Ventas Unificado
+              <b>""[arg1]"".</b><br /><br />
+              Feliz día y muchas gracias.
+            </p>
+            <p>
+              Saludos. <br />
+              Equipo RPA
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td class=""footer"">
+            Mensaje enviado automáticamente<br />No responder
+          </td>
+        </tr>
+      </table>
+    </center>
+  </body>
+</html>"
