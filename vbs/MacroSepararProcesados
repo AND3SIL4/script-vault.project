@@ -1,0 +1,78 @@
+Sub MoverProcesados(parametros As String)
+    On Error GoTo ManejoErrores
+    
+    Dim datos() As String
+    datos = Split(parametros, ",")
+    
+    Dim rutaLibro As String: rutaLibro = datos(0)
+    Dim nombreHoja As String: nombreHoja = datos(1)
+    Dim nombreColumnaEstado As String: nombreColumnaEstado = datos(2)
+    Dim rutaProcesados As String: rutaProcesados = datos(3)
+    Dim rutaBackup As String: rutaBackup = datos(4)
+
+    ' 1. Crear copia de seguridad
+    FileCopy rutaLibro, rutaBackup
+
+    ' 2. Abrir archivo original
+    Dim wb As Workbook
+    Set wb = Workbooks.Open(rutaLibro)
+    
+    Dim ws As Worksheet
+    Set ws = wb.Sheets(nombreHoja)
+    
+    ' 3. Identificar columna "Estado" (en fila 2)
+    Dim colEstado As Long
+    Dim ultimaCol As Long: ultimaCol = ws.Cells(2, ws.Columns.Count).End(xlToLeft).Column
+    Dim i As Long
+    For i = 1 To ultimaCol
+        If Trim(ws.Cells(2, i).Value) = nombreColumnaEstado Then
+            colEstado = i
+            Exit For
+        End If
+    Next i
+    If colEstado = 0 Then
+        MsgBox "No se encontró la columna '" & nombreColumnaEstado & "'.", vbCritical
+        Exit Sub
+    End If
+
+    ' 4. Crear nuevo libro para los procesados
+    Dim wbProcesados As Workbook
+    Set wbProcesados = Workbooks.Add
+    Dim wsProcesados As Worksheet
+    Set wsProcesados = wbProcesados.Sheets(1)
+
+    ' Copiar encabezados (filas 1 y 2)
+    ws.Rows("1:2").Copy Destination:=wsProcesados.Rows("1:2")
+    
+    ' 5. Filtrar filas con "procesado" y copiarlas
+    Dim filaDestino As Long: filaDestino = 3
+    Dim ultimaFila As Long: ultimaFila = ws.Cells(ws.Rows.Count, colEstado).End(xlUp).Row
+    
+    For i = 3 To ultimaFila
+        Dim valor As String
+        valor = LCase(Trim(ws.Cells(i, colEstado).Value))
+        If valor Like "*procesado*" Then
+            ws.Rows(i).Copy Destination:=wsProcesados.Rows(filaDestino)
+            filaDestino = filaDestino + 1
+            ws.Rows(i).EntireRow.Hidden = True ' Marcar para eliminar luego
+        End If
+    Next i
+    
+    ' 6. Eliminar filas ocultas (procesadas)
+    On Error Resume Next
+    ws.Range("A3:A" & ultimaFila).SpecialCells(xlCellTypeVisible).EntireRow.Delete
+    On Error GoTo 0
+    
+    ' 7. Guardar los archivos
+    wb.Save
+    wb.Close SaveChanges:=True
+    
+    wbProcesados.SaveAs Filename:=rutaProcesados, FileFormat:=xlOpenXMLWorkbook
+    wbProcesados.Close SaveChanges:=True
+    
+    MsgBox "Proceso completado correctamente.", vbInformation
+    Exit Sub
+    
+ManejoErrores:
+    MsgBox "Error: " & Err.Description, vbCritical
+End Sub
