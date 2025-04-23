@@ -1,0 +1,76 @@
+// Function to check if a web page is responding
+async function checkWebPage(url) {
+    console.log(`Checking website: ${url}`);
+    
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        const response = await fetch(url, { 
+            method: 'GET',
+            signal: controller.signal 
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+            console.log(`✅ Success: ${url} is responding with status code ${response.status}`);
+            return {
+                status: 'success',
+                statusCode: response.status,
+                message: `The website is functioning correctly.`
+            };
+        } else {
+            console.log(`❌ Error: ${url} responded with status code ${response.status}`);
+            return {
+                status: 'error',
+                statusCode: response.status,
+                message: `The website responded with an error status code: ${response.status}`
+            };
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            console.log(`⏱️ Timeout: ${url} did not respond within the timeout period`);
+            return {
+                status: 'timeout',
+                statusCode: null,
+                message: 'The request timed out. The website might be down or responding too slowly.'
+            };
+        } else {
+            console.log(`❌ Error: Failed to connect to ${url}`, error.message);
+            return {
+                status: 'error',
+                statusCode: null,
+                message: `Failed to connect: ${error.message}`
+            };
+        }
+    }
+}
+
+async function runChecks(urls) {
+    console.log('Starting website checks...');
+    
+    const results = {};
+    
+    for (const url of urls) {
+        results[url] = await checkWebPage(url);
+    }
+    
+    console.log('\nCheck Results Summary:');
+    for (const [url, result] of Object.entries(results)) {
+        console.log(`${url}: ${result.status.toUpperCase()} - ${result.message}`);
+    }
+    
+    return results;
+}
+
+// Example
+const urlsToCheck = [
+    'https://www.google.com',
+    'https://www.example.com',
+    'https://this-website-does-not-exist-123456789.com'
+];
+
+runChecks(urlsToCheck).then(results => {
+    console.log('\nAll checks completed!');
+});
