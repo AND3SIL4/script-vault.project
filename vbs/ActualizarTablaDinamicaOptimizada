@@ -1,0 +1,88 @@
+Sub ActualizarOrigenDatosTablaDinamica(libro As String, hoja As String, celdaTablaDinamica As String, rangoOrigenDatos As String, password As String)
+    ' Declarar variables
+    Dim xlApp As Object
+    Dim xlLibro As Object
+    Dim xlHoja As Object
+    Dim xlTablaDinamica As Object
+    Dim startTime As Double
+    
+    On Error GoTo ErrorHandler
+    
+    ' Registrar tiempo de inicio
+    startTime = Timer
+    
+    ' Verificar si Excel ya está abierto
+    Set xlApp = GetObject(, "Excel.Application")
+    If xlApp Is Nothing Then
+        Set xlApp = CreateObject("Excel.Application")
+    End If
+    
+    ' Optimizar rendimiento
+    With xlApp
+        .DisplayAlerts = False
+        .ScreenUpdating = False
+        .EnableEvents = False
+        .Calculation = -4135 'xlCalculationManual
+    End With
+    
+    ' Abrir el libro con opciones optimizadas
+    Set xlLibro = xlApp.Workbooks.Open(Filename:=libro, Password:=password, ReadOnly:=True, UpdateLinks:=False)
+    Set xlHoja = xlLibro.Sheets(hoja)
+    
+    ' Actualizar la tabla dinámica
+    Set xlTablaDinamica = xlHoja.Range(celdaTablaDinamica).PivotTable
+    xlTablaDinamica.ChangePivotCache xlLibro.PivotCaches.Create(SourceType:=1, SourceData:=rangoOrigenDatos) '1=xlDatabase
+    
+    ' Optimizar actualización
+    xlApp.EnableEvents = False
+    xlTablaDinamica.PivotCache.MissingItemsLimit = 0 'xlMissingItemsNone
+    xlTablaDinamica.RefreshTable
+    
+    ' Guardar y cerrar
+    xlLibro.Save
+    
+CleanUp:
+    ' Restaurar configuración y cerrar Excel
+    If Not xlLibro Is Nothing Then xlLibro.Close SaveChanges:=False
+    
+    If Not xlApp Is Nothing Then
+        With xlApp
+            .DisplayAlerts = True
+            .ScreenUpdating = True
+            .EnableEvents = True
+            .Calculation = -4105 'xlCalculationAutomatic
+            .Quit
+        End With
+    End If
+    
+    ' Liberar objetos
+    Set xlTablaDinamica = Nothing
+    Set xlHoja = Nothing
+    Set xlLibro = Nothing
+    Set xlApp = Nothing
+    
+    Debug.Print "Actualización completada en " & Format(Timer - startTime, "0.00") & " segundos"
+    Exit Sub
+    
+ErrorHandler:
+    Debug.Print "Error " & Err.Number & ": " & Err.Description
+    Resume CleanUp
+End Sub
+
+' Ejemplo de uso con más opciones
+Sub LlamarActualizarOrigenDatosTablaDinamica()
+    ' Establecer una referencia a la biblioteca de Excel si es necesario
+    '#If VBA7 And Win64 Then
+    '    If Dir(Environ("ProgramFiles") & "\Microsoft Office\root\Office16\EXCEL.EXE") <> "" Then
+    '        'Excel 365/2019/2016 de 64 bits
+    '    End If
+    '#End If
+    
+    Call ActualizarOrigenDatosTablaDinamica( _
+        "\\boinfii10d09\RepositorioAA\R_RPAOPM-197_LiquidacionDeIncentivos\RutaCompartida\clusterwinfs2fs\Gerencia_BancaSeguros\incentivos\Recaudos JUNIO 2024 Final.xlsx", _
+        "TABLA", _
+        "A3", _
+        "RECAUDOS!A:BX", _
+        "tu_contraseña" _
+    )
+End Sub
