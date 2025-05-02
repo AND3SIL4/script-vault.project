@@ -2,7 +2,6 @@
 'Script para remplazar todo lo que sea diferente a numeros en un columna, 
 'El caso de uso, La columna contenía datos numericos. EJ "99812Aaa" La forma de revolver es dejando la columna, 
 'Unicamente con numeros, sin datos como letras, puntos o comas. 
-
 Function ProcesarColumnas(libro, hoja, columnas)
     Dim objExcel, objWorkbook, objWorksheet
     Dim regex, celda, columna, fila
